@@ -3,6 +3,8 @@ import { useEditorStore } from '@features/editor/store/useEditorStore';
 import { useSettingsStore } from '@features/settings/store/useSettingsStore';
 import { useHandwritingRenderer } from '@hooks/useHandwritingRenderer';
 
+import { PaperCanvas } from './PaperCanvas';
+
 export const PaperPreview = (): JSX.Element => {
   const text = useEditorStore((state) => state.debouncedText);
 
@@ -29,12 +31,12 @@ export const PaperPreview = (): JSX.Element => {
       description="The preview updates after a short debounce to keep typing smooth."
     >
       <div
-        role="img"
-        aria-label="Handwriting preview canvas"
         aria-busy={isRendering}
-        className="overflow-hidden rounded-card border border-surface-200 bg-surface-100"
+        className="rounded-card border border-surface-200 bg-surface-50 p-3 sm:p-4"
       >
-        <canvas ref={canvasRef} className="h-[70vh] min-h-[560px] w-full" />
+        <PaperCanvas paperType={paperType} pageSize="A4" ariaLabel="Handwriting paper preview">
+          <canvas ref={canvasRef} className="h-full w-full" />
+        </PaperCanvas>
       </div>
     </SectionCard>
   );
