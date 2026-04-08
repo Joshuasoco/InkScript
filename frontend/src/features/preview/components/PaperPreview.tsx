@@ -1,13 +1,9 @@
-import { useEffect, useRef } from 'react';
-
 import { SectionCard } from '@components/ui/SectionCard';
 import { useEditorStore } from '@features/editor/store/useEditorStore';
 import { useSettingsStore } from '@features/settings/store/useSettingsStore';
-import { renderHandwriting } from '@utils/renderHandwriting';
+import { useHandwritingRenderer } from '@hooks/useHandwritingRenderer';
 
 export const PaperPreview = (): JSX.Element => {
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
-
   const text = useEditorStore((state) => state.debouncedText);
 
   const fontFamily = useSettingsStore((state) => state.fontFamily);
@@ -17,22 +13,15 @@ export const PaperPreview = (): JSX.Element => {
   const letterVariation = useSettingsStore((state) => state.letterVariation);
   const paperType = useSettingsStore((state) => state.paperType);
 
-  useEffect(() => {
-    const canvas = canvasRef.current;
-
-    if (!canvas) {
-      return;
-    }
-
-    renderHandwriting(canvas, text, {
-      fontFamily,
-      inkColor,
-      fontSize,
-      lineSpacing,
-      letterVariation,
-      paperType,
-    });
-  }, [fontFamily, inkColor, fontSize, letterVariation, lineSpacing, paperType, text]);
+  const { canvasRef, isRendering } = useHandwritingRenderer({
+    text,
+    fontFamily,
+    inkColor,
+    fontSize,
+    lineSpacing,
+    letterVariation: letterVariation / 100,
+    paperType,
+  });
 
   return (
     <SectionCard
@@ -42,6 +31,7 @@ export const PaperPreview = (): JSX.Element => {
       <div
         role="img"
         aria-label="Handwriting preview canvas"
+        aria-busy={isRendering}
         className="overflow-hidden rounded-card border border-surface-200 bg-surface-100"
       >
         <canvas ref={canvasRef} className="h-[70vh] min-h-[560px] w-full" />
