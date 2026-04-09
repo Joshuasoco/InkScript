@@ -1,3 +1,5 @@
+import type { MutableRefObject } from 'react';
+
 import { SectionCard } from '@components/ui/SectionCard';
 import { useEditorState } from '@features/editor/store/useEditorState';
 import { useSettingsStore } from '@features/settings/store/useSettingsStore';
@@ -5,7 +7,11 @@ import { useHandwritingRenderer } from '@hooks/useHandwritingRenderer';
 
 import { PaperCanvas } from './PaperCanvas';
 
-export const PaperPreview = (): JSX.Element => {
+interface PaperPreviewProps {
+  canvasRef?: MutableRefObject<HTMLCanvasElement | null>;
+}
+
+export const PaperPreview = ({ canvasRef: externalCanvasRef }: PaperPreviewProps): JSX.Element => {
   const text = useEditorState((state) => state.debouncedText);
   const refreshVersion = useEditorState((state) => state.refreshVersion);
 
@@ -25,6 +31,7 @@ export const PaperPreview = (): JSX.Element => {
     lineSpacing,
     letterVariation: letterVariation / 100,
     paperType,
+    canvasRef: externalCanvasRef,
     seed: refreshVersion === 0 ? undefined : refreshVersion,
   });
 

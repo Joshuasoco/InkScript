@@ -19,6 +19,7 @@ export interface UseHandwritingRendererOptions {
   lineSpacing: number;
   letterVariation: number;
   paperType: PaperType;
+  canvasRef?: MutableRefObject<HTMLCanvasElement | null>;
   seed?: number;
 }
 
@@ -267,9 +268,11 @@ export const useHandwritingRenderer = ({
   lineSpacing,
   letterVariation,
   paperType,
+  canvasRef: providedCanvasRef,
   seed,
 }: UseHandwritingRendererOptions): UseHandwritingRendererResult => {
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const internalCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const canvasRef = providedCanvasRef ?? internalCanvasRef;
   const animationFrameRef = useRef<number | null>(null);
   const renderSequenceRef = useRef(0);
   const [renderVersion, setRenderVersion] = useState(0);
