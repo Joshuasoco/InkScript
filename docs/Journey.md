@@ -342,7 +342,7 @@ Implementation requirements:
 
 ---
 
-## Phase 6 — Deployment
+## Phase 6 — Deployment ✅ COMPLETED
 
 **Goal:** Ship it to the world.
 
@@ -378,47 +378,58 @@ Prepare the Text-to-Handwriting app for production deployment on Vercel:
 
 ---
 
-## Features That Would Make This Project More Unique Than Others
+## Phase 7 — Differentiating Features (What Makes This Unique)
 
-> These are the differentiators — the features that existing tools like HandtextAI, RealisticHandwriting.com, and others **don't do well or don't do at all.** Build even 3 of these and you're already ahead.
+**Goal:** Build the features that no competitor offers. These are the differentiators — existing tools like HandtextAI, RealisticHandwriting.com, and texttohandwriting.com **don't do these well or at all.** Build even 3 and you're already ahead.
+
+> 💡 **Phase 7 Strategy:** Complete prompts in any order. Each is self-contained. Reference current component names from your codebase when pasting these prompts.
 
 ---
 
-### 🖊️ 1. Real-Time Live Preview As You Type
-Most tools make you click a "Generate" button. Yours updates the handwriting **live on the paper as the user types** — like watching a pen write in real time. Use debounced canvas re-rendering (300ms) so it feels instant without being laggy.
+### 🟦 Prompt 7.1 — Real-Time Live Preview As You Type
 
-**Prompt to add this:**
+**Why it's unique:** Most tools make you click "Generate." Yours updates handwriting **live as the user types** — like watching a pen write in real time. No competitor does this.
+
 ```
+You are a professional software engineer with 10+ years of experience building scalable,
+production-grade web applications.
+
 Add real-time live handwriting preview to the PaperCanvas component. As the user types
 in the TextInputPanel, the handwriting on the canvas should update with a 300ms debounce.
 Add a subtle ink-drawing animation: each new word appears with a short left-to-right
 draw animation (CSS transition on SVG stroke-dashoffset or canvas progressive render).
-Make it feel like a pen is physically writing the text.
+Make it feel like a pen is physically writing the text. Do not refactor unrelated code.
 ```
 
 ---
 
-### 🇵🇭 2. Filipino Language Support (Underserved Market)
-Almost zero handwriting tools support **Tagalog, Ilocano, Cebuano, or Kapampangan** properly. Add language-aware line breaking, correct diacritic rendering (mga, niyon, etc.), and a Filipino paper template (like a standard Filipino school pad with red margin line).
+### 🟦 Prompt 7.2 — Filipino Language Support (Underserved Market)
 
-**Prompt to add this:**
+**Why it's unique:** Almost zero handwriting tools support Tagalog, Ilocano, Cebuano, or Kapampangan. This targets a massive underserved local market with zero competition.
+
 ```
+You are a professional software engineer with 10+ years of experience building scalable,
+production-grade web applications.
+
 Add Filipino language support to the handwriting renderer:
 1. Ensure correct Unicode rendering for Filipino diacritics (á, é, í, ó, ú, ng, mga)
 2. Add a 'Filipino School Pad' paper template: off-white background, single red vertical
    margin line 1.5 inches from the left, horizontal blue rules every 28px
 3. Add Tagalog as a selectable language in settings that adjusts hyphenation and
    line-break rules using the Intl.Segmenter API
-This is a unique feature no competitor offers.
+This is a unique feature no competitor offers. Do not refactor unrelated code.
 ```
 
 ---
 
-### ✍️ 3. Upload Your OWN Handwriting (Custom Font Generator)
-Let users **take a photo of their handwriting** on a template sheet, upload it, and the app converts it into a personal handwriting font using it for all future output. This is the killer feature — your output literally looks like *you* wrote it.
+### 🟦 Prompt 7.3 — Upload Your Own Handwriting (Custom Font Generator)
 
-**Prompt to add this:**
+**Why it's unique:** The killer feature — your output literally looks like *you* wrote it. No free competitor offers this. Users take a photo of their own handwriting and the app converts it into a personal font.
+
 ```
+You are a professional software engineer with 10+ years of experience building scalable,
+production-grade web applications.
+
 Build a 'My Handwriting' feature:
 1. Provide a downloadable A4 template PDF with boxes for each letter A-Z, a-z, 0-9,
    and common punctuation
@@ -427,19 +438,19 @@ Build a 'My Handwriting' feature:
    crop them individually, and generate a custom SVG font definition
 4. Store the generated font in localStorage as a base64 SVG font file
 5. Add 'My Handwriting' as a selectable font option in the settings panel
+Do not refactor unrelated code.
 ```
 
 ---
 
-### 🎲 4. Controlled Imperfection Sliders
-The realism comes from **imperfection**. Add granular controls that no competitor exposes to users:
-- **Ink Pressure** — thicker downstrokes, thinner upstrokes
-- **Pen Wobble** — subtle path deviation on each stroke
-- **Tiredness Effect** — handwriting gets slightly messier toward the bottom of the page
-- **Left/Right Hand Mode** — adjusts natural slant direction
+### 🟦 Prompt 7.4 — Controlled Imperfection Sliders
 
-**Prompt to add this:**
+**Why it's unique:** Realism comes from imperfection. No competitor exposes these granular controls: Ink Pressure, Pen Wobble, Tiredness Effect, and Hand Mode.
+
 ```
+You are a professional software engineer with 10+ years of experience building scalable,
+production-grade web applications.
+
 Extend the handwriting renderer with advanced realism controls:
 1. Ink Pressure (0-100): Modulate stroke width per character — thick on downward motion,
    thin on upward (simulate ballpoint pen behavior on canvas)
@@ -449,23 +460,19 @@ Extend the handwriting renderer with advanced realism controls:
    by 0.5% per line, simulating a tired writer
 4. Hand Mode (Left/Right): Adjust default letter slant — right-hand: slight right lean,
    left-hand: slight left or vertical lean
-All sliders must update the canvas in real time.
+All sliders must update the canvas in real time. Do not refactor unrelated code.
 ```
 
 ---
 
-### 📸 5. Scan-Effect Export (Looks Like a Real Photo)
-Instead of a clean PNG, add a **"Scanned Paper" export mode** that adds:
-- Slight page rotation (0.3–1.5 degrees random)
-- Paper grain/texture overlay
-- Subtle vignette at page corners
-- Light shadow under the page
-- Optional coffee stain or crease effect
+### 🟦 Prompt 7.5 — Scan-Effect Export (Looks Like a Real Photo)
 
-This makes the output look like someone **photographed a real handwritten page**, not a digital render.
+**Why it's unique:** The output looks like someone *photographed* a real handwritten page — not a digital render. Slight rotation, paper grain, vignette, and optional crease effect.
 
-**Prompt to add this:**
 ```
+You are a professional software engineer with 10+ years of experience building scalable,
+production-grade web applications.
+
 Add a 'Scan Effect' export mode to the exportService:
 1. After rendering the base canvas, apply post-processing effects using a secondary
    offscreen canvas:
@@ -476,15 +483,19 @@ Add a 'Scan Effect' export mode to the exportService:
    - Optional crease: a faint diagonal line across the page at low opacity
 2. Add a toggle in the Export Menu: 'Clean' vs 'Scanned' mode
 3. The scanned output should look indistinguishable from a phone photo of real paper
+Do not refactor unrelated code.
 ```
 
 ---
 
-### 🌙 6. Dark Mode Ink-on-Chalkboard Theme
-Add a **Chalkboard mode** — dark green/black background with white/yellow chalk-style text rendering. Great for teachers, presentations, and social media content. No competitor offers this.
+### 🟦 Prompt 7.6 — Dark Mode Ink-on-Chalkboard Theme
 
-**Prompt to add this:**
+**Why it's unique:** Great for teachers, presentations, and social media content. No competitor offers this aesthetic at all.
+
 ```
+You are a professional software engineer with 10+ years of experience building scalable,
+production-grade web applications.
+
 Add a 'Chalkboard' theme to the paper type options:
 1. Background: dark green (#2d4a2d) or black (#1a1a1a) textured surface
 2. Ink color defaults to chalk white (#f5f0e8) with slight transparency variation
@@ -493,15 +504,19 @@ Add a 'Chalkboard' theme to the paper type options:
 4. The horizontal lines become faint white chalk marks
 5. Export renders the dark background correctly (no white page background)
 This should feel like writing on a real classroom chalkboard.
+Do not refactor unrelated code.
 ```
 
 ---
 
-### 📋 7. Direct Sharing to Social Media / WhatsApp
-Add a **Share button** (using the Web Share API) so users can instantly share their handwritten output to WhatsApp, Facebook, Instagram Stories, or download — without needing to save first. Huge for the Philippine market where WhatsApp and Facebook are primary.
+### 🟦 Prompt 7.7 — Direct Sharing to Social Media / WhatsApp
 
-**Prompt to add this:**
+**Why it's unique:** Huge for the Philippine market where WhatsApp and Facebook are primary communication platforms. Instant sharing without saving first is a frictionless UX win.
+
 ```
+You are a professional software engineer with 10+ years of experience building scalable,
+production-grade web applications.
+
 Add a Share feature using the Web Share API:
 1. Add a 'Share' button next to the Download button in ExportMenu
 2. On click: convert canvas to Blob, then call navigator.share() with:
@@ -513,11 +528,76 @@ Add a Share feature using the Web Share API:
    - Direct download button
    - A shareable link (if hosted)
 4. Show the share sheet immediately — no extra confirmation dialogs
+Do not refactor unrelated code.
 ```
 
 ---
 
-### 🏆 Competitive Comparison
+### 🟦 Prompt 7.8 — Realistic Yellow Pad Paper Mode (Interactive Header + Body)
+
+**Why it's unique:** A fully interactive digital yellow legal pad that mirrors the physical experience — header area for name/date fields, body for continuous writing, with draggable/resizable text elements. No competitor replicates the physical yellow pad UX.
+
+**Context:** The yellow pad layout has two distinct zones:
+- **Header area** — larger line spacing; typically where name, date, and subject are written
+- **Body area** — consistent narrower line spacing for main content
+
+**What to build:**
+- The header zone supports **drag-and-drop text elements** (Name, Date, Subject) that users can reposition freely, like placing labels on real paper
+- Text elements in the header are **resizable** by dragging a handle
+- The body zone supports **continuous line-aligned typing**, with the cursor snapping to each ruled line
+- Users can **click anywhere on a body line** to start typing at that position
+- After positioning a header element, pressing Tab or Enter smoothly shifts focus to the body for uninterrupted writing
+- The yellow pad paper color (`#FDFBD4`) and ruled lines (`#B0C4DE` at 32px spacing, with a wider 64px spacing for the header) must accurately match a physical legal pad
+- A single **red left margin line** at 72px from the left edge
+- The overall feel: flexible placement first, then smooth continuous typing
+
+```
+You are a professional software engineer with 10+ years of experience building scalable,
+production-grade web applications.
+
+Build a <YellowPadEditor /> React component that replicates a physical yellow legal pad:
+
+PAPER LAYOUT:
+- Background: #FDFBD4 (classic yellow pad color)
+- Red left margin line: 1px solid #E8A0A0 at x=72px
+- Header zone: top 192px of the pad — ruled lines at 64px spacing (3 wide lines)
+- Body zone: below 192px — ruled lines at 32px spacing, faint blue (#B0C4DE)
+- Drop shadow and paper border for realism
+
+HEADER ZONE — Draggable Text Elements:
+- Render 3 default labeled fields: 'Name:', 'Date:', 'Subject:'
+- Each field is a draggable container (use @dnd-kit/core or native HTML5 drag API)
+- Each container has: a label (non-editable), an inline contentEditable input, and a resize handle
+- Dragging repositions the element freely within the header zone bounds
+- Resize handle on the bottom-right corner scales the text element width
+- On Tab or Enter inside any header field → focus moves to the first body line
+
+BODY ZONE — Line-Aligned Typing:
+- Body is a transparent contentEditable div overlaid on the ruled lines
+- line-height must exactly match the 32px rule spacing so text sits on the lines
+- Clicking on any visible line area sets the cursor to that line
+- Typing flows naturally from the clicked position, wrapping to the next line
+- No scrollbars within the body — the page grows in height as content fills
+
+STATE & ARCHITECTURE:
+- Use a Zustand slice: useYellowPadStore with: headerElements[], bodyContent: string
+- headerElements: { id, label, value, x, y, width }
+- Persist state to localStorage under key 'yellowpad-state'
+- Export a getPadSnapshot(): Promise<Blob> function using html2canvas for saving
+
+STYLE:
+- Tailwind for layout and positioning
+- Inline dynamic styles only for x/y/width on draggable elements
+- Full TypeScript types for all props and store shape
+- Accessible: each header field has aria-label matching its label text
+
+Do not refactor unrelated code. Integrate into the existing PaperCanvas paperType system
+by adding 'yellow-pad' as a new paperType option in useSettingsStore.
+```
+
+---
+
+## 🏆 Competitive Comparison
 
 | Feature | Your App | HandtextAI | RealisticHandwriting.com | texttohandwriting.com |
 |---|---|---|---|---|
@@ -528,6 +608,7 @@ Add a Share feature using the Web Share API:
 | Scan photo effect export | ✅ | ❌ | ❌ | ❌ |
 | Chalkboard mode | ✅ | ❌ | ❌ | ❌ |
 | Web Share API (WhatsApp) | ✅ | ❌ | ❌ | ❌ |
+| Interactive Yellow Pad mode | ✅ | ❌ | ❌ | ❌ |
 | 100% Free, no watermark | ✅ | ❌ (paid) | ✅ | ✅ |
 
 ---
@@ -544,5 +625,6 @@ Add a Share feature using the Web Share API:
 
 ---
 
-*Roadmap version: 1.0 — Text-to-Handwriting Web App*
+*Roadmap version: 2.0 — Text-to-Handwriting Web App*
 *Stack: React 18 · Vite · TypeScript · Tailwind CSS · Zustand · Canvas API*
+*Phases 1–6: ✅ Complete | Phase 7: 🚧 In Progress*

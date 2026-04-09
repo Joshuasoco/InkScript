@@ -37,6 +37,17 @@ const createErrorResult = (error: string): ExportResult => ({
   error,
 });
 
+const sanitizeFilenameBase = (value: string): string =>
+  Array.from(value, (character) => {
+    const codePoint = character.codePointAt(0) ?? 0;
+
+    if (codePoint <= 0x1f || '<>:"/\\|?*'.includes(character)) {
+      return '-';
+    }
+
+    return character;
+  }).join('');
+
 const getCanvasElement = (canvasRef: RefObject<HTMLCanvasElement>): HTMLCanvasElement | null => {
   const canvas = canvasRef.current;
 
@@ -111,7 +122,7 @@ const normalizeFilename = (filename: string, extension: 'png' | 'pdf'): string =
     return fallbackName;
   }
 
-  const sanitizedBase = trimmed.replace(/[<>:"/\\|?*\u0000-\u001F]+/g, '-').replace(/\.+$/, '');
+  const sanitizedBase = sanitizeFilenameBase(trimmed).replace(/-+/g, '-').replace(/\.+$/, '');
 
   if (sanitizedBase.length === 0) {
     return fallbackName;

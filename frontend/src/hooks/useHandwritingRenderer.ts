@@ -1,24 +1,40 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { MutableRefObject } from 'react';
 
-import type { PaperType } from '../types/handwriting';
+import { getLogicalPageDimensions } from '@features/preview/utils/pageLayout';
+import type { PageSize, PaperType } from '../types/handwriting';
+import HandwritingWorker from '../workers/handwritingWorker?worker';
 
-const DEFAULT_CANVAS_WIDTH = 900;
-const DEFAULT_CANVAS_HEIGHT = 1200;
 const PAGE_PADDING = 48;
-const MAX_SIZE_JITTER = 2;
-const MAX_ROTATION_DEGREES = 1.5;
-const MAX_Y_OFFSET = 2;
 const TARGET_CHARACTERS_PER_FRAME = 280;
 
+interface RandomizedCharacter {
+  sizeOffset: number;
+  rotation: number;
+  yOffset: number;
+}
+
+interface RandomizedLine {
+  characters: RandomizedCharacter[];
+}
+
+interface WorkerResponse {
+  type: 'randomized';
+  payload: {
+    lines: RandomizedLine[];
+  };
+}
+
 export interface UseHandwritingRendererOptions {
-  text: string;
+  lines: string[];
   fontFamily: string;
   inkColor: string;
   fontSize: number;
   lineSpacing: number;
   letterVariation: number;
   paperType: PaperType;
+  pageSize: PageSize;
+  pageIndex: number;
   canvasRef?: MutableRefObject<HTMLCanvasElement | null>;
   seed?: number;
 }
@@ -29,45 +45,7 @@ export interface UseHandwritingRendererResult {
   isRendering: boolean;
 }
 
-interface LineLayout {
-  text: string;
-  y: number;
-}
-
-const clamp = (value: number, min: number, max: number): number => {
-  if (value < min) {
-    return min;
-  }
-
-  if (value > max) {
-    return max;
-  }
-
-  return value;
-};
-
 const degreesToRadians = (value: number): number => (value * Math.PI) / 180;
-
-const createSeededRandom = (seed: number): (() => number) => {
-  let state = seed >>> 0;
-
-  return () => {
-    state += 0x6d2b79f5;
-
-    let next = Math.imul(state ^ (state >>> 15), state | 1);
-    next ^= next + Math.imul(next ^ (next >>> 7), next | 61);
-
-    return ((next ^ (next >>> 14)) >>> 0) / 4294967296;
-  };
-};
-
-const randomInRange = (random: () => number, min: number, max: number): number =>
-  min + (max - min) * random();
-
-const getCanvasSize = (canvas: HTMLCanvasElement): { width: number; height: number } => ({
-  width: canvas.clientWidth > 0 ? canvas.clientWidth : DEFAULT_CANVAS_WIDTH,
-  height: canvas.clientHeight > 0 ? canvas.clientHeight : DEFAULT_CANVAS_HEIGHT,
-});
 
 const drawPaperBackground = (
   context: CanvasRenderingContext2D,
@@ -124,123 +102,29 @@ const drawPaperBackground = (
   }
 };
 
-const splitTokenToFitLine = (
-  context: CanvasRenderingContext2D,
-  token: string,
-  maxWidth: number,
-): string[] => {
-  const segments: string[] = [];
-  let currentSegment = '';
-
-  for (const character of token) {
-    const candidate = `${currentSegment}${character}`;
-
-    if (currentSegment.length > 0 && context.measureText(candidate).width > maxWidth) {
-      segments.push(currentSegment);
-      currentSegment = character;
-      continue;
-    }
-
-    currentSegment = candidate;
-  }
-
-  if (currentSegment.length > 0) {
-    segments.push(currentSegment);
-  }
-
-  return segments;
-};
-
-const buildWrappedLines = (
-  context: CanvasRenderingContext2D,
-  text: string,
-  maxWidth: number,
-  lineHeight: number,
-  canvasHeight: number,
-): LineLayout[] => {
-  const paragraphs = text.replace(/\t/g, '    ').split('\n');
-  const lines: LineLayout[] = [];
-
-  const pushLine = (value: string): void => {
-    const y = PAGE_PADDING + (lines.length + 1) * lineHeight;
-
-    if (y > canvasHeight - PAGE_PADDING) {
-      return;
-    }
-
-    lines.push({ text: value, y });
-  };
-
-  for (const paragraph of paragraphs) {
-    if (paragraph.length === 0) {
-      pushLine('');
-      continue;
-    }
-
-    const tokens = paragraph.split(/(\s+)/).filter((token) => token.length > 0);
-    let currentLine = '';
-
-    for (const token of tokens) {
-      if (/^\s+$/.test(token) && currentLine.length === 0) {
-        continue;
-      }
-
-      const candidate = `${currentLine}${token}`;
-
-      if (context.measureText(candidate).width <= maxWidth) {
-        currentLine = candidate;
-        continue;
-      }
-
-      if (currentLine.trimEnd().length > 0) {
-        pushLine(currentLine.trimEnd());
-        currentLine = '';
-      }
-
-      if (/^\s+$/.test(token)) {
-        continue;
-      }
-
-      if (context.measureText(token).width <= maxWidth) {
-        currentLine = token;
-        continue;
-      }
-
-      const segments = splitTokenToFitLine(context, token, maxWidth);
-
-      for (const [segmentIndex, segment] of segments.entries()) {
-        if (segmentIndex === segments.length - 1) {
-          currentLine = segment;
-        } else {
-          pushLine(segment);
-        }
-      }
-    }
-
-    pushLine(currentLine.trimEnd());
-  }
-
-  return lines;
-};
-
 const drawLine = (
   context: CanvasRenderingContext2D,
-  line: LineLayout,
-  settings: Omit<UseHandwritingRendererOptions, 'text' | 'seed'>,
-  random: () => number,
+  line: string,
+  randomizedLine: RandomizedLine | undefined,
+  lineIndex: number,
+  settings: {
+    fontFamily: string;
+    fontSize: number;
+    lineSpacing: number;
+  },
   maxX: number,
 ): void => {
   let x = PAGE_PADDING;
-  const intensity = clamp(settings.letterVariation, 0, 1);
+  const y = PAGE_PADDING + (lineIndex + 1) * settings.fontSize * settings.lineSpacing;
 
-  for (const character of line.text) {
-    const sizeOffset = randomInRange(random, -MAX_SIZE_JITTER, MAX_SIZE_JITTER) * intensity;
-    const rotation = degreesToRadians(
-      randomInRange(random, -MAX_ROTATION_DEGREES, MAX_ROTATION_DEGREES) * intensity,
-    );
-    const yOffset = randomInRange(random, -MAX_Y_OFFSET, MAX_Y_OFFSET) * intensity;
+  for (const [characterIndex, character] of Array.from(line).entries()) {
+    const transform = randomizedLine?.characters[characterIndex] ?? {
+      sizeOffset: 0,
+      rotation: 0,
+      yOffset: 0,
+    };
+    const characterFontSize = Math.max(1, settings.fontSize + transform.sizeOffset);
 
-    const characterFontSize = Math.max(1, settings.fontSize + sizeOffset);
     context.font = `${characterFontSize}px ${settings.fontFamily}`;
 
     const characterWidth = context.measureText(character).width;
@@ -251,8 +135,8 @@ const drawLine = (
     }
 
     context.save();
-    context.translate(x + characterWidth / 2, line.y + yOffset);
-    context.rotate(rotation);
+    context.translate(x + characterWidth / 2, y + transform.yOffset);
+    context.rotate(degreesToRadians(transform.rotation));
     context.fillText(character, -characterWidth / 2, 0);
     context.restore();
 
@@ -261,13 +145,15 @@ const drawLine = (
 };
 
 export const useHandwritingRenderer = ({
-  text,
+  lines,
   fontFamily,
   inkColor,
   fontSize,
   lineSpacing,
   letterVariation,
   paperType,
+  pageSize,
+  pageIndex,
   canvasRef: providedCanvasRef,
   seed,
 }: UseHandwritingRendererOptions): UseHandwritingRendererResult => {
@@ -275,36 +161,46 @@ export const useHandwritingRenderer = ({
   const canvasRef = providedCanvasRef ?? internalCanvasRef;
   const animationFrameRef = useRef<number | null>(null);
   const renderSequenceRef = useRef(0);
+  const workerRef = useRef<Worker | null>(null);
   const [renderVersion, setRenderVersion] = useState(0);
-  const [resizeVersion, setResizeVersion] = useState(0);
   const [isRendering, setIsRendering] = useState(false);
 
-  const regenerate = (): void => {
+  // WHY: The canvas size is memoized from page settings so redraws happen only when the paper shape changes.
+  const logicalPageSize = useMemo(() => getLogicalPageDimensions(pageSize), [pageSize]);
+
+  // WHY: Memoizing render settings prevents every parent re-render from invalidating the expensive draw effect.
+  const renderSettings = useMemo(
+    () => ({
+      fontFamily,
+      inkColor,
+      fontSize,
+      lineSpacing,
+      letterVariation,
+      paperType,
+    }),
+    [fontFamily, inkColor, fontSize, lineSpacing, letterVariation, paperType],
+  );
+
+  // WHY: The manual refresh handler stays referentially stable so memoized preview pages do not redraw unnecessarily.
+  const regenerate = useCallback((): void => {
     setRenderVersion((value) => value + 1);
-  };
+  }, []);
 
   useEffect(() => {
-    const canvas = canvasRef.current;
-
-    if (!canvas) {
-      return;
-    }
-
-    const observer = new ResizeObserver(() => {
-      setResizeVersion((value) => value + 1);
-    });
-
-    observer.observe(canvas);
+    // WHY: Reusing one worker per preview page avoids worker startup churn while keeping jitter math off the UI thread.
+    workerRef.current = new HandwritingWorker();
 
     return () => {
-      observer.disconnect();
+      workerRef.current?.terminate();
+      workerRef.current = null;
     };
   }, []);
 
   useEffect(() => {
     const canvas = canvasRef.current;
+    const worker = workerRef.current;
 
-    if (!canvas) {
+    if (!canvas || !worker) {
       return;
     }
 
@@ -319,29 +215,17 @@ export const useHandwritingRenderer = ({
       return;
     }
 
-    const { width: cssWidth, height: cssHeight } = getCanvasSize(canvas);
     const pixelRatio = window.devicePixelRatio || 1;
 
-    canvas.width = Math.round(cssWidth * pixelRatio);
-    canvas.height = Math.round(cssHeight * pixelRatio);
+    canvas.width = Math.round(logicalPageSize.width * pixelRatio);
+    canvas.height = Math.round(logicalPageSize.height * pixelRatio);
 
     context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
-    context.clearRect(0, 0, cssWidth, cssHeight);
+    context.clearRect(0, 0, logicalPageSize.width, logicalPageSize.height);
 
-    drawPaperBackground(context, cssWidth, cssHeight, paperType);
-
-    context.fillStyle = inkColor;
+    drawPaperBackground(context, logicalPageSize.width, logicalPageSize.height, renderSettings.paperType);
+    context.fillStyle = renderSettings.inkColor;
     context.textBaseline = 'alphabetic';
-    context.font = `${fontSize}px ${fontFamily}`;
-
-    const lineHeight = fontSize * lineSpacing;
-    const lines = buildWrappedLines(
-      context,
-      text,
-      cssWidth - PAGE_PADDING * 2,
-      lineHeight,
-      cssHeight,
-    );
 
     if (lines.length === 0) {
       setIsRendering(false);
@@ -353,84 +237,92 @@ export const useHandwritingRenderer = ({
     setIsRendering(true);
 
     const effectiveSeed =
-      seed ?? ((Date.now() + renderVersion * 101 + resizeVersion * 37) ^ (fontSize << 8)) >>> 0;
-    const random = createSeededRandom(effectiveSeed);
-    const maxX = cssWidth - PAGE_PADDING;
-    let nextLineIndex = 0;
+      seed ??
+      ((Date.now() + renderVersion * 101 + pageIndex * 3571) ^ (renderSettings.fontSize << 8)) >>> 0;
+    const maxX = logicalPageSize.width - PAGE_PADDING;
 
-    const finishRendering = (): void => {
-      if (renderSequenceRef.current !== renderId) {
+    const handleWorkerMessage = (event: MessageEvent<WorkerResponse>): void => {
+      if (renderSequenceRef.current !== renderId || event.data.type !== 'randomized') {
         return;
       }
 
-      animationFrameRef.current = null;
-      setIsRendering(false);
-    };
+      const randomizedLines = event.data.payload.lines;
+      let nextLineIndex = 0;
 
-    const renderFrame = (): void => {
-      if (renderSequenceRef.current !== renderId) {
-        return;
-      }
+      const finishRendering = (): void => {
+        if (renderSequenceRef.current !== renderId) {
+          return;
+        }
 
-      let remainingCharacters = TARGET_CHARACTERS_PER_FRAME;
+        animationFrameRef.current = null;
+        setIsRendering(false);
+      };
 
-      while (nextLineIndex < lines.length && remainingCharacters > 0) {
-        const line = lines[nextLineIndex];
+      const renderFrame = (): void => {
+        if (renderSequenceRef.current !== renderId) {
+          return;
+        }
 
-        if (!line) {
+        // WHY: Chunking canvas writes across animation frames keeps long pages from blocking keystrokes and scroll input.
+        let remainingCharacters = TARGET_CHARACTERS_PER_FRAME;
+
+        while (nextLineIndex < lines.length && remainingCharacters > 0) {
+          const line = lines[nextLineIndex];
+
+          if (line === undefined) {
+            finishRendering();
+            return;
+          }
+
+          drawLine(
+            context,
+            line,
+            randomizedLines[nextLineIndex],
+            nextLineIndex,
+            {
+              fontFamily: renderSettings.fontFamily,
+              fontSize: renderSettings.fontSize,
+              lineSpacing: renderSettings.lineSpacing,
+            },
+            maxX,
+          );
+
+          remainingCharacters -= Math.max(line.length, 1);
+          nextLineIndex += 1;
+        }
+
+        if (nextLineIndex >= lines.length) {
           finishRendering();
           return;
         }
 
-        drawLine(
-          context,
-          line,
-          {
-            fontFamily,
-            inkColor,
-            fontSize,
-            lineSpacing,
-            letterVariation,
-            paperType,
-          },
-          random,
-          maxX,
-        );
-
-        remainingCharacters -= Math.max(line.text.length, 1);
-        nextLineIndex += 1;
-      }
-
-      if (nextLineIndex >= lines.length) {
-        finishRendering();
-        return;
-      }
+        animationFrameRef.current = window.requestAnimationFrame(renderFrame);
+      };
 
       animationFrameRef.current = window.requestAnimationFrame(renderFrame);
     };
 
-    animationFrameRef.current = window.requestAnimationFrame(renderFrame);
+    worker.addEventListener('message', handleWorkerMessage as EventListener);
+    worker.postMessage({
+      type: 'randomize',
+      payload: {
+        lines,
+        fontSize: renderSettings.fontSize,
+        letterVariation: renderSettings.letterVariation,
+        seed: effectiveSeed,
+      },
+    });
 
     return () => {
       renderSequenceRef.current += 1;
+      worker.removeEventListener('message', handleWorkerMessage as EventListener);
 
       if (animationFrameRef.current !== null) {
         window.cancelAnimationFrame(animationFrameRef.current);
         animationFrameRef.current = null;
       }
     };
-  }, [
-    fontFamily,
-    fontSize,
-    inkColor,
-    letterVariation,
-    lineSpacing,
-    paperType,
-    renderVersion,
-    resizeVersion,
-    seed,
-    text,
-  ]);
+  }, [canvasRef, lines, logicalPageSize, pageIndex, renderSettings, renderVersion, seed]);
 
   return {
     canvasRef,

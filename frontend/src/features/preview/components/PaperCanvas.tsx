@@ -1,4 +1,4 @@
-import { useId } from 'react';
+import { memo, useId, useMemo } from 'react';
 import type { ReactNode } from 'react';
 
 import type { PageSize, PaperType } from '../../../types/handwriting';
@@ -36,7 +36,7 @@ const getPaperLabel = (
   return `${pageSize} ${paperType} paper preview`;
 };
 
-const PaperPattern = ({ paperType }: { paperType: PaperType }): JSX.Element | null => {
+const PaperPattern = memo(({ paperType }: { paperType: PaperType }): JSX.Element | null => {
   const patternId = useId().replace(/:/g, '');
 
   if (paperType === 'blank') {
@@ -116,24 +116,39 @@ const PaperPattern = ({ paperType }: { paperType: PaperType }): JSX.Element | nu
       <rect width="100%" height="100%" fill={`url(#paper-dotted-${patternId})`} />
     </svg>
   );
-};
+});
 
-export const PaperCanvas = ({
+const PaperCanvasComponent = ({
   paperType,
   pageSize,
   children,
   ariaLabel,
   className,
 }: PaperCanvasProps): JSX.Element => {
+  // WHY: These derived strings are memoized because the page shell re-renders often while preview canvases stream in.
+  const paperLabel = useMemo(
+    () => getPaperLabel(paperType, pageSize, ariaLabel),
+    [ariaLabel, pageSize, paperType],
+  );
+  const containerClassName = useMemo(
+    () => `mx-auto w-full ${PAGE_SIZE_CLASSES[pageSize]} ${className ?? ''}`,
+    [className, pageSize],
+  );
+  const shellClassName = useMemo(
+    () =>
+      `relative h-full w-full overflow-hidden rounded-[clamp(1rem,2vw,1.75rem)] border border-[#e7dcc7] shadow-paper-lg ring-1 ring-white/70 ${PAPER_BACKGROUND_CLASSES[paperType]}`,
+    [paperType],
+  );
+
   return (
-    <div className={`mx-auto w-full ${PAGE_SIZE_CLASSES[pageSize]} ${className ?? ''}`}>
+    <div className={containerClassName}>
       <div
         role="img"
         aria-roledescription="paper document preview"
-        aria-label={getPaperLabel(paperType, pageSize, ariaLabel)}
+        aria-label={paperLabel}
         data-page-size={pageSize}
         data-paper-type={paperType}
-        className={`relative h-full w-full overflow-hidden rounded-[clamp(1rem,2vw,1.75rem)] border border-[#e7dcc7] shadow-paper-lg ring-1 ring-white/70 ${PAPER_BACKGROUND_CLASSES[paperType]}`}
+        className={shellClassName}
       >
         <PaperPattern paperType={paperType} />
         <div className="absolute inset-0 bg-gradient-to-br from-white/35 via-transparent to-[#efe5d4]/40" aria-hidden="true" />
@@ -143,3 +158,6 @@ export const PaperCanvas = ({
     </div>
   );
 };
+
+// WHY: The paper shell is visually rich but static, so memoization prevents expensive SVG/background work on unrelated state changes.
+export const PaperCanvas = memo(PaperCanvasComponent);
