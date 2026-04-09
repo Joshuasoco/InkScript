@@ -7,6 +7,8 @@ import HandwritingWorker from '../workers/handwritingWorker?worker';
 
 const PAGE_PADDING = 48;
 const TARGET_CHARACTERS_PER_FRAME = 280;
+const WORD_REVEAL_DURATION_MS = 180;
+const WORD_REVEAL_STAGGER_MS = 75;
 
 interface RandomizedCharacter {
   sizeOffset: number;
@@ -16,6 +18,32 @@ interface RandomizedCharacter {
 
 interface RandomizedLine {
   characters: RandomizedCharacter[];
+}
+
+interface AnimatedWordRange {
+  startIndex: number;
+  endIndex: number;
+  delayMs: number;
+}
+
+interface LineAnimationPlan {
+  staticUntilIndex: number;
+  words: Array<Omit<AnimatedWordRange, 'delayMs'>>;
+}
+
+interface LineCharacterMetric {
+  index: number;
+  character: string;
+  x: number;
+  width: number;
+  fontSize: number;
+  rotation: number;
+  yOffset: number;
+}
+
+interface LineDrawPlan {
+  y: number;
+  characters: LineCharacterMetric[];
 }
 
 interface WorkerResponse {
@@ -46,6 +74,21 @@ export interface UseHandwritingRendererResult {
 }
 
 const degreesToRadians = (value: number): number => (value * Math.PI) / 180;
+
+const clamp = (value: number, min: number, max: number): number => {
+  if (value < min) {
+    return min;
+  }
+
+  if (value > max) {
+    return max;
+  }
+
+  return value;
+};
+
+const isWhitespace = (character: string | undefined): boolean =>
+  character !== undefined && /\s/.test(character);
 
 const drawPaperBackground = (
   context: CanvasRenderingContext2D,
@@ -102,7 +145,7 @@ const drawPaperBackground = (
   }
 };
 
-const drawLine = (
+const getLineDrawPlan = (
   context: CanvasRenderingContext2D,
   line: string,
   randomizedLine: RandomizedLine | undefined,
@@ -113,9 +156,10 @@ const drawLine = (
     lineSpacing: number;
   },
   maxX: number,
-): void => {
+): LineDrawPlan => {
   let x = PAGE_PADDING;
   const y = PAGE_PADDING + (lineIndex + 1) * settings.fontSize * settings.lineSpacing;
+  const characters: LineCharacterMetric[] = [];
 
   for (const [characterIndex, character] of Array.from(line).entries()) {
     const transform = randomizedLine?.characters[characterIndex] ?? {
@@ -134,14 +178,142 @@ const drawLine = (
       break;
     }
 
-    context.save();
-    context.translate(x + characterWidth / 2, y + transform.yOffset);
-    context.rotate(degreesToRadians(transform.rotation));
-    context.fillText(character, -characterWidth / 2, 0);
-    context.restore();
+    characters.push({
+      index: characterIndex,
+      character,
+      x,
+      width: characterWidth,
+      fontSize: characterFontSize,
+      rotation: transform.rotation,
+      yOffset: transform.yOffset,
+    });
 
     x = nextX;
   }
+
+  return {
+    y,
+    characters,
+  };
+};
+
+const drawLineCharacters = (
+  context: CanvasRenderingContext2D,
+  linePlan: LineDrawPlan,
+  settings: {
+    fontFamily: string;
+  },
+  startIndex = 0,
+  endIndex = Number.POSITIVE_INFINITY,
+): void => {
+  for (const metric of linePlan.characters) {
+    if (metric.index < startIndex || metric.index >= endIndex) {
+      continue;
+    }
+
+    context.font = `${metric.fontSize}px ${settings.fontFamily}`;
+    context.save();
+    context.translate(metric.x + metric.width / 2, linePlan.y + metric.yOffset);
+    context.rotate(degreesToRadians(metric.rotation));
+    context.fillText(metric.character, -metric.width / 2, 0);
+    context.restore();
+  }
+};
+
+const createLineAnimationPlan = (
+  previousLine: string | undefined,
+  nextLine: string,
+): LineAnimationPlan | null => {
+  if (previousLine === nextLine) {
+    return null;
+  }
+
+  const previousCharacters = Array.from(previousLine ?? '');
+  const nextCharacters = Array.from(nextLine);
+  let sharedPrefixLength = 0;
+
+  while (
+    sharedPrefixLength < previousCharacters.length &&
+    sharedPrefixLength < nextCharacters.length &&
+    previousCharacters[sharedPrefixLength] === nextCharacters[sharedPrefixLength]
+  ) {
+    sharedPrefixLength += 1;
+  }
+
+  let animationStartIndex = Math.min(sharedPrefixLength, nextCharacters.length);
+
+  while (animationStartIndex > 0 && !isWhitespace(nextCharacters[animationStartIndex - 1])) {
+    animationStartIndex -= 1;
+  }
+
+  const words: Array<Omit<AnimatedWordRange, 'delayMs'>> = [];
+  let currentIndex = animationStartIndex;
+
+  while (currentIndex < nextCharacters.length) {
+    while (currentIndex < nextCharacters.length && isWhitespace(nextCharacters[currentIndex])) {
+      currentIndex += 1;
+    }
+
+    const wordStart = currentIndex;
+
+    while (currentIndex < nextCharacters.length && !isWhitespace(nextCharacters[currentIndex])) {
+      currentIndex += 1;
+    }
+
+    if (wordStart < currentIndex) {
+      words.push({
+        startIndex: wordStart,
+        endIndex: currentIndex,
+      });
+    }
+  }
+
+  if (words.length === 0) {
+    return null;
+  }
+
+  return {
+    staticUntilIndex: animationStartIndex,
+    words,
+  };
+};
+
+const drawAnimatedWord = (
+  context: CanvasRenderingContext2D,
+  linePlan: LineDrawPlan,
+  settings: {
+    fontFamily: string;
+    fontSize: number;
+  },
+  word: AnimatedWordRange,
+  progress: number,
+): void => {
+  const visibleCharacters = linePlan.characters.filter(
+    (metric) => metric.index >= word.startIndex && metric.index < word.endIndex,
+  );
+
+  if (visibleCharacters.length === 0) {
+    return;
+  }
+
+  const firstCharacter = visibleCharacters[0];
+  const lastCharacter = visibleCharacters[visibleCharacters.length - 1];
+
+  if (!firstCharacter || !lastCharacter) {
+    return;
+  }
+
+  const left = firstCharacter.x;
+  const right = lastCharacter.x + lastCharacter.width;
+  const revealWidth = Math.max(0, (right - left) * progress);
+
+  context.save();
+  context.globalAlpha = 0.35 + progress * 0.65;
+  context.beginPath();
+  context.rect(left - 1, linePlan.y - settings.fontSize * 1.2, revealWidth + 2, settings.fontSize * 1.8);
+  context.clip();
+  drawLineCharacters(context, linePlan, settings, word.startIndex, word.endIndex);
+  context.restore();
 };
 
 export const useHandwritingRenderer = ({
@@ -162,6 +334,7 @@ export const useHandwritingRenderer = ({
   const animationFrameRef = useRef<number | null>(null);
   const renderSequenceRef = useRef(0);
   const workerRef = useRef<Worker | null>(null);
+  const previousLinesRef = useRef<string[]>([]);
   const [renderVersion, setRenderVersion] = useState(0);
   const [isRendering, setIsRendering] = useState(false);
 
@@ -235,6 +408,8 @@ export const useHandwritingRenderer = ({
     const renderId = renderSequenceRef.current + 1;
     renderSequenceRef.current = renderId;
     setIsRendering(true);
+    const previousLines = previousLinesRef.current;
+    previousLinesRef.current = lines;
 
     const effectiveSeed =
       seed ??
@@ -248,6 +423,11 @@ export const useHandwritingRenderer = ({
 
       const randomizedLines = event.data.payload.lines;
       let nextLineIndex = 0;
+      let nextAnimatedWordDelay = 0;
+      const animatedLineEntries: Array<{
+        linePlan: LineDrawPlan;
+        words: AnimatedWordRange[];
+      }> = [];
 
       const finishRendering = (): void => {
         if (renderSequenceRef.current !== renderId) {
@@ -256,6 +436,52 @@ export const useHandwritingRenderer = ({
 
         animationFrameRef.current = null;
         setIsRendering(false);
+      };
+
+      const animateChangedWords = (startTimestamp: number): void => {
+        const animationStep = (timestamp: number): void => {
+          if (renderSequenceRef.current !== renderId) {
+            return;
+          }
+
+          let hasPendingAnimations = false;
+          const elapsed = timestamp - startTimestamp;
+
+          for (const entry of animatedLineEntries) {
+            for (const word of entry.words) {
+              const progress = clamp((elapsed - word.delayMs) / WORD_REVEAL_DURATION_MS, 0, 1);
+
+              if (progress <= 0) {
+                hasPendingAnimations = true;
+                continue;
+              }
+
+              drawAnimatedWord(
+                context,
+                entry.linePlan,
+                {
+                  fontFamily: renderSettings.fontFamily,
+                  fontSize: renderSettings.fontSize,
+                },
+                word,
+                progress,
+              );
+
+              if (progress < 1) {
+                hasPendingAnimations = true;
+              }
+            }
+          }
+
+          if (!hasPendingAnimations) {
+            finishRendering();
+            return;
+          }
+
+          animationFrameRef.current = window.requestAnimationFrame(animationStep);
+        };
+
+        animationFrameRef.current = window.requestAnimationFrame(animationStep);
       };
 
       const renderFrame = (): void => {
@@ -274,7 +500,7 @@ export const useHandwritingRenderer = ({
             return;
           }
 
-          drawLine(
+          const linePlan = getLineDrawPlan(
             context,
             line,
             randomizedLines[nextLineIndex],
@@ -286,13 +512,61 @@ export const useHandwritingRenderer = ({
             },
             maxX,
           );
+          const lineAnimation = createLineAnimationPlan(previousLines[nextLineIndex], line);
+
+          if (!lineAnimation) {
+            drawLineCharacters(context, linePlan, {
+              fontFamily: renderSettings.fontFamily,
+            });
+          } else {
+            // WHY: Comparing against the previously rendered lines lets us animate only new words instead of replaying the whole page on every keystroke.
+            drawLineCharacters(
+              context,
+              linePlan,
+              {
+                fontFamily: renderSettings.fontFamily,
+              },
+              0,
+              lineAnimation.staticUntilIndex,
+            );
+
+            const visibleAnimatedWords = lineAnimation.words
+              .map((word, wordIndex) => ({
+                ...word,
+                delayMs: nextAnimatedWordDelay + wordIndex * WORD_REVEAL_STAGGER_MS,
+              }))
+              .filter((word) =>
+                linePlan.characters.some(
+                  (metric) => metric.index >= word.startIndex && metric.index < word.endIndex,
+                ),
+              );
+
+            if (visibleAnimatedWords.length > 0) {
+              animatedLineEntries.push({
+                linePlan,
+                words: visibleAnimatedWords,
+              });
+              nextAnimatedWordDelay += visibleAnimatedWords.length * WORD_REVEAL_STAGGER_MS;
+            } else {
+              drawLineCharacters(context, linePlan, {
+                fontFamily: renderSettings.fontFamily,
+              });
+            }
+          }
 
           remainingCharacters -= Math.max(line.length, 1);
           nextLineIndex += 1;
         }
 
         if (nextLineIndex >= lines.length) {
-          finishRendering();
+          if (animatedLineEntries.length === 0) {
+            finishRendering();
+            return;
+          }
+
+          animationFrameRef.current = window.requestAnimationFrame((timestamp) => {
+            animateChangedWords(timestamp);
+          });
           return;
         }
 
