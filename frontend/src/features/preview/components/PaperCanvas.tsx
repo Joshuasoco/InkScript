@@ -1,11 +1,11 @@
 import { useId } from 'react';
 import type { ReactNode } from 'react';
 
-import type { PaperType } from '../../../types/handwriting';
+import type { PageSize, PaperType } from '../../../types/handwriting';
 
 export interface PaperCanvasProps {
   paperType: PaperType;
-  pageSize: 'A4' | 'Letter' | 'Square';
+  pageSize: PageSize;
   children: ReactNode;
   ariaLabel?: string;
   className?: string;

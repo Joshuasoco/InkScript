@@ -1,15 +1,48 @@
 import { create } from 'zustand';
 
-import type { HandwritingSettings, PaperType } from '../../../types/handwriting';
+import type { FontOption, HandwritingSettings, PageSize, PaperType } from '../../../types/handwriting';
 
 interface SettingsState extends HandwritingSettings {
-  setFontFamily: (value: string) => void;
+  setFontFamily: (value: FontOption['family']) => void;
   setInkColor: (value: string) => void;
   setFontSize: (value: number) => void;
   setLineSpacing: (value: number) => void;
   setLetterVariation: (value: number) => void;
   setPaperType: (value: PaperType) => void;
+  setPageSize: (value: PageSize) => void;
 }
+
+const clamp = (value: number, min: number, max: number): number => {
+  if (Number.isNaN(value)) {
+    return min;
+  }
+
+  if (value < min) {
+    return min;
+  }
+
+  if (value > max) {
+    return max;
+  }
+
+  return value;
+};
+
+const normalizeHexColor = (value: string): string | null => {
+  const trimmed = value.trim();
+
+  if (trimmed.length === 0) {
+    return null;
+  }
+
+  const withHash = trimmed.startsWith('#') ? trimmed : `#${trimmed}`;
+
+  if (!/^#[0-9a-fA-F]{6}$/.test(withHash)) {
+    return null;
+  }
+
+  return withHash.toUpperCase();
+};
 
 const DEFAULT_SETTINGS: HandwritingSettings = {
   fontFamily: 'Caveat, cursive',
@@ -18,6 +51,7 @@ const DEFAULT_SETTINGS: HandwritingSettings = {
   lineSpacing: 1.5,
   letterVariation: 36,
   paperType: 'lined',
+  pageSize: 'A4',
 };
 
 export const useSettingsStore = create<SettingsState>((set) => ({
@@ -26,18 +60,27 @@ export const useSettingsStore = create<SettingsState>((set) => ({
     set({ fontFamily: value });
   },
   setInkColor: (value) => {
-    set({ inkColor: value });
+    set((state) => {
+      const normalized = normalizeHexColor(value);
+
+      return {
+        inkColor: normalized ?? state.inkColor,
+      };
+    });
   },
   setFontSize: (value) => {
-    set({ fontSize: value });
+    set({ fontSize: Math.round(clamp(value, 12, 28)) });
   },
   setLineSpacing: (value) => {
-    set({ lineSpacing: value });
+    set({ lineSpacing: Math.round(clamp(value, 1, 2.5) * 10) / 10 });
   },
   setLetterVariation: (value) => {
-    set({ letterVariation: value });
+    set({ letterVariation: Math.round(clamp(value, 0, 100)) });
   },
   setPaperType: (value) => {
     set({ paperType: value });
+  },
+  setPageSize: (value) => {
+    set({ pageSize: value });
   },
 }));
