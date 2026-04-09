@@ -131,6 +131,8 @@ export const PaperCanvas = ({
         role="img"
         aria-roledescription="paper document preview"
         aria-label={getPaperLabel(paperType, pageSize, ariaLabel)}
+        data-page-size={pageSize}
+        data-paper-type={paperType}
         className={`relative h-full w-full overflow-hidden rounded-[clamp(1rem,2vw,1.75rem)] border border-[#e7dcc7] shadow-paper-lg ring-1 ring-white/70 ${PAPER_BACKGROUND_CLASSES[paperType]}`}
       >
         <PaperPattern paperType={paperType} />
