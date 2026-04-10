@@ -5,6 +5,7 @@ import { SectionCard } from '@components/ui/SectionCard';
 import { useEditorState } from '@features/editor/store/useEditorState';
 import { useSettingsStore } from '@features/settings/store/useSettingsStore';
 import { useHandwritingRenderer } from '@hooks/useHandwritingRenderer';
+import { loadFont } from '@utils/fontLoader';
 import type { PageSize, PaperType } from '../../../types/handwriting';
 
 import { PaperCanvas } from './PaperCanvas';
@@ -105,6 +106,8 @@ export const PaperPreview = ({
 
   const [scrollTop, setScrollTop] = useState(0);
   const [viewportSize, setViewportSize] = useState({ width: 0, height: 0 });
+  const [fontLoadVersion, setFontLoadVersion] = useState(0);
+  const [fontLoadError, setFontLoadError] = useState<string | null>(null);
 
   // WHY: Layout generation measures and paginates the full document, so memoizing it avoids repeating the expensive work on unrelated UI updates.
   const previewLayout = useMemo(
@@ -118,6 +121,37 @@ export const PaperPreview = ({
       }),
     [fontFamily, fontSize, lineSpacing, pageSize, text],
   );
+
+  useEffect(() => {
+    let isActive = true;
+
+    const ensureFontIsLoaded = async (): Promise<void> => {
+      try {
+        await loadFont(fontFamily);
+
+        if (!isActive) {
+          return;
+        }
+
+        setFontLoadError(null);
+        setFontLoadVersion((currentValue) => currentValue + 1);
+      } catch (error) {
+        if (!isActive) {
+          return;
+        }
+
+        setFontLoadError(
+          error instanceof Error ? error.message : 'The selected font could not be loaded.',
+        );
+      }
+    };
+
+    void ensureFontIsLoaded();
+
+    return () => {
+      isActive = false;
+    };
+  }, [fontFamily]);
 
   useEffect(() => {
     const viewport = viewportRef.current;
@@ -197,6 +231,12 @@ export const PaperPreview = ({
           <span>{previewLayout.lineCount} wrapped lines</span>
         </div>
 
+        {fontLoadError ? (
+          <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            {fontLoadError}
+          </div>
+        ) : null}
+
         <div
           ref={viewportRef}
           onScroll={handleScroll}
@@ -225,7 +265,7 @@ export const PaperPreview = ({
                         letterVariation={letterVariation}
                         paperType={paperType}
                         pageSize={pageSize}
-                        refreshVersion={refreshVersion}
+                        refreshVersion={refreshVersion + fontLoadVersion}
                         compact={compact}
                         externalCanvasRef={
                           externalCanvasRef && page.index === visiblePageRange.start
@@ -251,7 +291,7 @@ export const PaperPreview = ({
                   letterVariation={letterVariation}
                   paperType={paperType}
                   pageSize={pageSize}
-                  refreshVersion={refreshVersion}
+                  refreshVersion={refreshVersion + fontLoadVersion}
                   compact={compact}
                   externalCanvasRef={externalCanvasRef && page.index === 0 ? externalCanvasRef : undefined}
                 />

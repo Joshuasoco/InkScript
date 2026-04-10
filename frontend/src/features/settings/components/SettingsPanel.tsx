@@ -2,6 +2,11 @@ import { useEffect, useId, useState } from 'react';
 
 import { SectionCard } from '@components/ui/SectionCard';
 import {
+  MyHandwritingWizard,
+  hasSavedFont as hasSavedMyHandwritingFont,
+} from '@features/my-handwriting';
+import { MY_HANDWRITING_FONT_FAMILY } from '@features/my-handwriting/constants';
+import {
   HANDWRITING_FONTS,
   PAGE_SIZES,
   PAPER_TYPES,
@@ -107,6 +112,9 @@ const PageSizePreview = ({ pageSize }: { pageSize: PageSize }): JSX.Element => (
 export const SettingsPanel = (): JSX.Element => {
   const accordionId = useId();
   const [openGroup, setOpenGroup] = useState<SettingsGroup | null>('style');
+  const [isMyHandwritingOpen, setIsMyHandwritingOpen] = useState(false);
+  const [hasCustomFont, setHasCustomFont] = useState(false);
+  const [isCheckingCustomFont, setIsCheckingCustomFont] = useState(true);
 
   const fontFamily = useSettingsStore((state) => state.fontFamily);
   const inkColor = useSettingsStore((state) => state.inkColor);
@@ -129,6 +137,38 @@ export const SettingsPanel = (): JSX.Element => {
   useEffect(() => {
     setInkDraft(inkColor.toUpperCase());
   }, [inkColor]);
+
+  useEffect(() => {
+    let isActive = true;
+
+    const syncCustomFontAvailability = async (): Promise<void> => {
+      setIsCheckingCustomFont(true);
+
+      try {
+        const nextHasCustomFont = await hasSavedMyHandwritingFont();
+
+        if (!isActive) {
+          return;
+        }
+
+        setHasCustomFont(nextHasCustomFont);
+
+        if (!nextHasCustomFont && fontFamily === MY_HANDWRITING_FONT_FAMILY) {
+          setFontFamily('Caveat, cursive');
+        }
+      } finally {
+        if (isActive) {
+          setIsCheckingCustomFont(false);
+        }
+      }
+    };
+
+    void syncCustomFontAvailability();
+
+    return () => {
+      isActive = false;
+    };
+  }, [fontFamily, setFontFamily]);
 
   const toggleGroup = (group: SettingsGroup): void => {
     setOpenGroup((currentGroup) => (currentGroup === group ? null : group));
@@ -210,6 +250,8 @@ export const SettingsPanel = (): JSX.Element => {
               >
                 {HANDWRITING_FONTS.map((font) => {
                   const isSelected = font.family === fontFamily;
+                  const isCustomFont = font.family === MY_HANDWRITING_FONT_FAMILY;
+                  const isReady = !isCustomFont || hasCustomFont;
 
                   return (
                     <button
@@ -218,6 +260,11 @@ export const SettingsPanel = (): JSX.Element => {
                       role="radio"
                       aria-checked={isSelected}
                       onClick={() => {
+                        if (isCustomFont && !isReady) {
+                          setIsMyHandwritingOpen(true);
+                          return;
+                        }
+
                         setFontFamily(font.family);
                       }}
                       className={`rounded-panel border p-4 text-left transition ${
@@ -226,17 +273,77 @@ export const SettingsPanel = (): JSX.Element => {
                           : 'border-neutral-200 bg-white hover:border-primary-200'
                       }`}
                     >
-                      <p className="text-sm font-medium text-neutral-700">{font.label}</p>
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-medium text-neutral-700">{font.label}</p>
+                          {font.description ? (
+                            <p className="mt-1 text-xs text-neutral-500">{font.description}</p>
+                          ) : null}
+                        </div>
+
+                        {isCustomFont ? (
+                          <span
+                            className={`rounded-full px-2 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.12em] ${
+                              isReady
+                                ? 'bg-accent-50 text-accent-700'
+                                : 'bg-amber-50 text-amber-800'
+                            }`}
+                          >
+                            {isCheckingCustomFont ? 'Checking' : isReady ? 'Ready' : 'Setup'}
+                          </span>
+                        ) : null}
+                      </div>
+
                       <p
                         className="mt-3 text-[1.8rem] leading-none text-neutral-900"
-                        style={{ fontFamily: font.family }}
+                        style={{ fontFamily: isReady ? font.family : '"Times New Roman", serif' }}
                       >
-                        Hello
+                        {isCustomFont ? 'My style' : 'Hello'}
                       </p>
                     </button>
                   );
                 })}
               </div>
+
+              <div className="rounded-2xl border border-dashed border-primary-200 bg-white/80 px-4 py-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-medium text-neutral-800">Upload your own handwriting</p>
+                    <p className="mt-1 text-sm text-neutral-500">
+                      Build a personal client-side font from a printable template and a single photo.
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsMyHandwritingOpen((currentValue) => !currentValue);
+                    }}
+                    className="min-h-11 rounded-2xl border border-primary-200 bg-white px-4 text-sm font-medium text-primary-700 transition hover:border-primary-400"
+                  >
+                    {isMyHandwritingOpen ? 'Hide Wizard' : hasCustomFont ? 'Manage Font' : 'Set Up'}
+                  </button>
+                </div>
+              </div>
+
+              {isMyHandwritingOpen ? (
+                <MyHandwritingWizard
+                  isFontReady={hasCustomFont}
+                  onFontReady={() => {
+                    setHasCustomFont(true);
+                    setFontFamily(MY_HANDWRITING_FONT_FAMILY);
+                  }}
+                  onFontRemoved={() => {
+                    setHasCustomFont(false);
+                    if (fontFamily === MY_HANDWRITING_FONT_FAMILY) {
+                      setFontFamily('Caveat, cursive');
+                    }
+                  }}
+                  onSelectFont={() => {
+                    setFontFamily(MY_HANDWRITING_FONT_FAMILY);
+                  }}
+                />
+              ) : null}
             </div>
 
             <div className="space-y-3">
