@@ -1,6 +1,14 @@
 # ✍️ Text-to-Handwriting Website — Professional Prompt Roadmap
 
-> **Role Prompt (Use this at the start of EVERY session):**
+> **Roadmap version:** 2.1 — Text-to-Handwriting Web App
+> **Stack:** React 18 · Vite · TypeScript · Tailwind CSS · Zustand · Canvas API
+> **Status:** Phases 1–6 ✅ Complete | Phase 7 🚧 In Progress
+
+---
+
+## Role Prompt
+
+> Use this at the start of **every** session:
 >
 > *"You are a professional software engineer with 10+ years of experience building scalable, production-grade web applications. You specialize in React, Node.js, TypeScript, and modern frontend architecture. You write clean, modular, and maintainable code following SOLID principles, separation of concerns, and industry best practices. You think in systems — not just features. Every decision you make considers performance, scalability, accessibility, and developer experience. You never cut corners on architecture."*
 
@@ -128,11 +136,8 @@ Create a React component called `<PaperCanvas />` that:
    - 'dotted': 20px dot grid
 
 2. Accepts a `children` prop to overlay the handwriting canvas on top
-
 3. Has a realistic paper shadow/elevation using box-shadow
-
 4. Is fully responsive — scales correctly on mobile and desktop
-
 5. Accepts `pageSize` prop: 'A4' | 'Letter' | 'Square'
 
 Component must be:
@@ -159,7 +164,6 @@ Create a utility module at /src/utils/fontLoader.ts that:
    FontFace Web API — loads the font dynamically and adds it to document.fonts
 
 3. Exports a `preloadFonts(families: string[]): Promise<void>` for batch loading
-
 4. Handles errors gracefully with typed error returns
 
 Include at least 8 realistic handwriting font entries with Google Fonts URLs.
@@ -305,7 +309,8 @@ Review and optimize the Text-to-Handwriting app for performance:
    - Use Vite's ?worker import syntax
    - The worker receives text + settings and returns processed character data
 
-4. Implement virtualization for very long texts (>500 lines) using a simple windowed rendering approach
+4. Implement virtualization for very long texts (>500 lines) using a simple windowed
+   rendering approach
 
 Document every optimization with a comment explaining WHY it was applied.
 ```
@@ -378,9 +383,9 @@ Prepare the Text-to-Handwriting app for production deployment on Vercel:
 
 ---
 
-## Phase 7 — Differentiating Features (What Makes This Unique)
+## Phase 7 — Differentiating Features
 
-**Goal:** Build the features that no competitor offers. These are the differentiators — existing tools like HandtextAI, RealisticHandwriting.com, and texttohandwriting.com **don't do these well or at all.** Build even 3 and you're already ahead.
+**Goal:** Build the features that no competitor offers. These are the key differentiators — existing tools like HandtextAI, RealisticHandwriting.com, and texttohandwriting.com don't do these well or at all. Build even 3 and you're already ahead.
 
 > 💡 **Phase 7 Strategy:** Complete prompts in any order. Each is self-contained. Reference current component names from your codebase when pasting these prompts.
 
@@ -388,7 +393,7 @@ Prepare the Text-to-Handwriting app for production deployment on Vercel:
 
 ### 🟦 Prompt 7.1 — Real-Time Live Preview As You Type
 
-**Why it's unique:** Most tools make you click "Generate." Yours updates handwriting **live as the user types** — like watching a pen write in real time. No competitor does this.
+> **Why it's unique:** Most tools make you click "Generate." Yours updates handwriting *live as the user types* — like watching a pen write in real time. No competitor does this.
 
 ```
 You are a professional software engineer with 10+ years of experience building scalable,
@@ -405,7 +410,7 @@ Make it feel like a pen is physically writing the text. Do not refactor unrelate
 
 ### 🟦 Prompt 7.2 — Filipino Language Support (Underserved Market)
 
-**Why it's unique:** Almost zero handwriting tools support Tagalog, Ilocano, Cebuano, or Kapampangan. This targets a massive underserved local market with zero competition.
+> **Why it's unique:** Almost zero handwriting tools support Tagalog, Ilocano, Cebuano, or Kapampangan. This targets a massive underserved local market with zero competition.
 
 ```
 You are a professional software engineer with 10+ years of experience building scalable,
@@ -417,6 +422,7 @@ Add Filipino language support to the handwriting renderer:
    margin line 1.5 inches from the left, horizontal blue rules every 28px
 3. Add Tagalog as a selectable language in settings that adjusts hyphenation and
    line-break rules using the Intl.Segmenter API
+
 This is a unique feature no competitor offers. Do not refactor unrelated code.
 ```
 
@@ -424,28 +430,196 @@ This is a unique feature no competitor offers. Do not refactor unrelated code.
 
 ### 🟦 Prompt 7.3 — Upload Your Own Handwriting (Custom Font Generator)
 
-**Why it's unique:** The killer feature — your output literally looks like *you* wrote it. No free competitor offers this. Users take a photo of their own handwriting and the app converts it into a personal font.
+> **Why it's unique:** The killer feature — your output literally looks like *you* wrote it. No free competitor offers this. Users fill in a printable template with their own handwriting, upload a photo, and the app generates a personal font — entirely client-side, no AI or paid APIs required.
+
+#### System Overview
+
+The pipeline is fully deterministic and works offline. No OCR, no vision API, no machine learning.
+
+```
+┌──────────────────────────────────────────────────────────────────┐
+│                     MY HANDWRITING PIPELINE                      │
+│                                                                  │
+│  1. Template PDF   →   2. User fills    →   3. Photo upload      │
+│     (generated)           & prints             (browser)         │
+│                                                                  │
+│  4. Grid slicer    →   5. Preprocessing  →   6. Vectorization    │
+│  (fixed coords)       (threshold/norm)       (Potrace / WASM)    │
+│                                                                  │
+│  7. Font builder   →   8. WOFF/TTF       →   9. FontFace load    │
+│   (opentype.js)        (download)             (live preview)     │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+#### Key Libraries
+
+| Library | Purpose | Install |
+|---|---|---|
+| `jspdf` | Generate the A4 template PDF | `npm i jspdf` |
+| `opentype.js` | Build TTF/WOFF font from SVG paths | `npm i opentype.js` |
+| `potrace` / `potrace-wasm` | Bitmap → SVG path vectorization | `npm i potrace-wasm` |
+| `idb` | IndexedDB wrapper for font storage | `npm i idb` |
+
+> **No AI, no paid APIs.** All processing runs entirely in the browser.
+
+#### Architecture
+
+```
+/src/features/myHandwriting/
+├── components/
+│   ├── TemplateDownloader.tsx     # Generate + download the PDF template
+│   ├── ImageUploader.tsx          # Drag-and-drop or file input
+│   ├── GridOverlayPreview.tsx     # Shows sliced cells over the uploaded image
+│   ├── GlyphAdjuster.tsx          # Optional: manual per-character tweak
+│   └── FontPreview.tsx            # Live "The quick brown fox…" preview
+├── services/
+│   ├── templateGenerator.ts       # jsPDF A4 grid layout
+│   ├── gridSlicer.ts              # Fixed-coordinate image cropping
+│   ├── imagePreprocessor.ts       # Grayscale → threshold → normalize → center
+│   ├── vectorizer.ts              # Potrace WASM bitmap → SVG path
+│   └── fontBuilder.ts             # opentype.js glyph assembly → WOFF/TTF
+├── store/
+│   └── useMyHandwritingStore.ts   # Zustand: upload state, glyph map, font blob
+└── db/
+    └── fontStorage.ts             # IndexedDB read/write via idb
+```
+
+#### Prompt
 
 ```
 You are a professional software engineer with 10+ years of experience building scalable,
 production-grade web applications.
 
-Build a 'My Handwriting' feature:
-1. Provide a downloadable A4 template PDF with boxes for each letter A-Z, a-z, 0-9,
-   and common punctuation
-2. User uploads a photo of the filled template
-3. Use the Anthropic Vision API to extract each character from the template image,
-   crop them individually, and generate a custom SVG font definition
-4. Store the generated font in localStorage as a base64 SVG font file
-5. Add 'My Handwriting' as a selectable font option in the settings panel
-Do not refactor unrelated code.
+Build a 'My Handwriting' feature as a self-contained module at /src/features/myHandwriting/.
+This feature allows users to generate their own handwriting font entirely in the browser —
+no AI, no paid APIs, no server required.
+
+─────────────────────────────────────────
+STEP 1 — TEMPLATE GENERATION
+─────────────────────────────────────────
+Create templateGenerator.ts using jsPDF to produce a downloadable A4 PDF template:
+- A fixed grid of labeled boxes, one per character
+- Characters covered: A–Z (uppercase), a–z (lowercase), 0–9, and common punctuation
+  (. , ! ? ' " - ( ) @ # & %)
+- Each box: 60×80px, labeled above with the target character in a small sans-serif font
+- Grid layout: 10 columns × rows as needed, 12px gutter, 40px page margins
+- Include printed instructions at the top:
+  "Fill each box with your handwriting. Keep characters centered. Use a dark pen."
+- Export function: generateTemplate(): void — triggers browser download of 'template.pdf'
+
+─────────────────────────────────────────
+STEP 2 — IMAGE UPLOAD & GRID OVERLAY
+─────────────────────────────────────────
+Create ImageUploader.tsx:
+- Accepts drag-and-drop or file input (JPEG, PNG, WEBP, max 10MB)
+- Draws the uploaded image onto an <HTMLCanvasElement>
+- Overlays the expected grid as semi-transparent red lines so the user can verify alignment
+- Shows a visual warning badge if the image appears rotated (aspect ratio mismatch)
+
+─────────────────────────────────────────
+STEP 3 — GRID SLICING (Deterministic)
+─────────────────────────────────────────
+Create gridSlicer.ts:
+- Define GRID_CONFIG: { cols: 10, cellW: 60, cellH: 80, gutter: 12, marginTop: 80,
+  marginLeft: 40 } — must exactly match the template layout
+- Export sliceCharacters(canvas: HTMLCanvasElement): Map<string, ImageData>
+  - Iterates over the character list in fixed order
+  - Calculates each cell's pixel origin from GRID_CONFIG
+  - Returns a Map keyed by Unicode character (e.g. 'A', 'b', '3', '!')
+- No heuristics, no detection — positions are 100% fixed and predictable
+
+─────────────────────────────────────────
+STEP 4 — IMAGE PREPROCESSING (Per Cell)
+─────────────────────────────────────────
+Create imagePreprocessor.ts:
+Export preprocessGlyph(imageData: ImageData): ImageData that applies in sequence:
+1. Grayscale: luminance formula (0.299R + 0.587G + 0.114B)
+2. Binarization: Otsu's thresholding algorithm to find the optimal threshold value
+   automatically — do not use a hardcoded magic number
+3. Contrast normalization: stretch histogram so min=0, max=255
+4. Noise removal: 3×3 median filter pass to remove stray pixels
+5. Bounding box crop: find the tight bounding box of dark pixels, add 4px padding
+6. Centering & scaling: scale to fit within a 48×64px canvas, centered on a
+   white 60×80px background (matching font em-square proportions)
+
+─────────────────────────────────────────
+STEP 5 — VECTORIZATION
+─────────────────────────────────────────
+Create vectorizer.ts using potrace-wasm:
+- Export async vectorizeGlyph(imageData: ImageData): Promise<string>
+  - Converts the preprocessed bitmap to a 1-bit BMP buffer
+  - Passes it to Potrace with: turdsize: 2, alphamax: 1, opticurve: true
+  - Returns the raw SVG <path d="..."> string
+- Export async vectorizeAll(glyphs: Map<string, ImageData>): Promise<Map<string, string>>
+  for batch processing with per-glyph error isolation (one bad glyph must not abort all)
+
+─────────────────────────────────────────
+STEP 6 — FONT GENERATION
+─────────────────────────────────────────
+Create fontBuilder.ts using opentype.js:
+- Export async buildFont(paths: Map<string, string>): Promise<ArrayBuffer>
+  - Creates a new opentype.Font with:
+    - familyName: 'MyHandwriting'
+    - styleName: 'Regular'
+    - unitsPerEm: 1000
+    - ascender: 800, descender: -200
+  - For each character → SVG path string:
+    - Parse path data using opentype.Path
+    - Flip Y-axis (SVG is top-down, font coords are bottom-up)
+    - Scale to fill the em-square proportionally
+    - Create opentype.Glyph with correct unicode codepoint and advanceWidth
+  - Includes a .notdef glyph for unmapped characters
+  - Downloads as 'my-handwriting.woff' via URL.createObjectURL
+
+─────────────────────────────────────────
+STEP 7 — STORAGE
+─────────────────────────────────────────
+Create fontStorage.ts using the idb library:
+- Store the generated font ArrayBuffer in IndexedDB under key 'my-handwriting-font'
+- Export: saveFont(buffer: ArrayBuffer): Promise<void>
+- Export: loadFont(): Promise<ArrayBuffer | null>
+- Export: deleteFont(): Promise<void>
+- Do NOT use localStorage for binary data — font files exceed the 5MB localStorage limit
+
+─────────────────────────────────────────
+STEP 8 — DYNAMIC FONT LOADING
+─────────────────────────────────────────
+Create a loadMyHandwritingFont() function in fontLoader.ts:
+- Reads the ArrayBuffer from IndexedDB via loadFont()
+- Creates a Blob URL from the buffer
+- Loads it via the FontFace API: new FontFace('MyHandwriting', `url(${blobUrl})`)
+- Calls document.fonts.add(font) so it is available to the canvas renderer
+- Returns { success: boolean; error?: string }
+
+─────────────────────────────────────────
+STEP 9 — UI INTEGRATION
+─────────────────────────────────────────
+Create a <MyHandwritingWizard /> component with a 4-step progress stepper:
+  Step 1: Download Template
+  Step 2: Upload Photo (with grid overlay preview and alignment warning)
+  Step 3: Processing (progress bar: Slicing → Preprocessing → Vectorizing → Building Font)
+  Step 4: Done (live font preview + Download .woff button)
+
+Add 'My Handwriting' as a selectable option in useSettingsStore alongside the existing fonts.
+When selected, call loadMyHandwritingFont() before rendering.
+
+─────────────────────────────────────────
+CONSTRAINTS
+─────────────────────────────────────────
+- Zero AI, zero paid APIs, zero server requests — 100% client-side
+- TypeScript strict mode throughout — no `any` types
+- Each service module is independently testable (pure functions where possible)
+- Potrace WASM must be lazy-loaded only when the user reaches Step 3 (code split)
+- All processing must run in a Web Worker to keep the UI responsive
+- Graceful degradation: if a character cell fails processing, skip it and continue
+- Do not refactor unrelated code
 ```
 
 ---
 
 ### 🟦 Prompt 7.4 — Controlled Imperfection Sliders
 
-**Why it's unique:** Realism comes from imperfection. No competitor exposes these granular controls: Ink Pressure, Pen Wobble, Tiredness Effect, and Hand Mode.
+> **Why it's unique:** Realism comes from imperfection. No competitor exposes these granular controls: Ink Pressure, Pen Wobble, Tiredness Effect, and Hand Mode.
 
 ```
 You are a professional software engineer with 10+ years of experience building scalable,
@@ -460,6 +634,7 @@ Extend the handwriting renderer with advanced realism controls:
    by 0.5% per line, simulating a tired writer
 4. Hand Mode (Left/Right): Adjust default letter slant — right-hand: slight right lean,
    left-hand: slight left or vertical lean
+
 All sliders must update the canvas in real time. Do not refactor unrelated code.
 ```
 
@@ -467,7 +642,7 @@ All sliders must update the canvas in real time. Do not refactor unrelated code.
 
 ### 🟦 Prompt 7.5 — Scan-Effect Export (Looks Like a Real Photo)
 
-**Why it's unique:** The output looks like someone *photographed* a real handwritten page — not a digital render. Slight rotation, paper grain, vignette, and optional crease effect.
+> **Why it's unique:** The output looks like someone photographed a real handwritten page — not a digital render. Slight rotation, paper grain, vignette, and optional crease effect.
 
 ```
 You are a professional software engineer with 10+ years of experience building scalable,
@@ -483,6 +658,7 @@ Add a 'Scan Effect' export mode to the exportService:
    - Optional crease: a faint diagonal line across the page at low opacity
 2. Add a toggle in the Export Menu: 'Clean' vs 'Scanned' mode
 3. The scanned output should look indistinguishable from a phone photo of real paper
+
 Do not refactor unrelated code.
 ```
 
@@ -490,7 +666,7 @@ Do not refactor unrelated code.
 
 ### 🟦 Prompt 7.6 — Dark Mode Ink-on-Chalkboard Theme
 
-**Why it's unique:** Great for teachers, presentations, and social media content. No competitor offers this aesthetic at all.
+> **Why it's unique:** Great for teachers, presentations, and social media content. No competitor offers this aesthetic at all.
 
 ```
 You are a professional software engineer with 10+ years of experience building scalable,
@@ -503,6 +679,7 @@ Add a 'Chalkboard' theme to the paper type options:
    (2px blur, 20% opacity white) to simulate chalk on slate
 4. The horizontal lines become faint white chalk marks
 5. Export renders the dark background correctly (no white page background)
+
 This should feel like writing on a real classroom chalkboard.
 Do not refactor unrelated code.
 ```
@@ -511,7 +688,7 @@ Do not refactor unrelated code.
 
 ### 🟦 Prompt 7.7 — Direct Sharing to Social Media / WhatsApp
 
-**Why it's unique:** Huge for the Philippine market where WhatsApp and Facebook are primary communication platforms. Instant sharing without saving first is a frictionless UX win.
+> **Why it's unique:** Huge for the Philippine market where WhatsApp and Facebook are primary communication platforms. Instant sharing without saving first is a frictionless UX win.
 
 ```
 You are a professional software engineer with 10+ years of experience building scalable,
@@ -528,6 +705,7 @@ Add a Share feature using the Web Share API:
    - Direct download button
    - A shareable link (if hosted)
 4. Show the share sheet immediately — no extra confirmation dialogs
+
 Do not refactor unrelated code.
 ```
 
@@ -535,21 +713,20 @@ Do not refactor unrelated code.
 
 ### 🟦 Prompt 7.8 — Realistic Yellow Pad Paper Mode (Interactive Header + Body)
 
-**Why it's unique:** A fully interactive digital yellow legal pad that mirrors the physical experience — header area for name/date fields, body for continuous writing, with draggable/resizable text elements. No competitor replicates the physical yellow pad UX.
+> **Why it's unique:** A fully interactive digital yellow legal pad that mirrors the physical experience — header area for name/date fields, body for continuous writing, with draggable/resizable text elements. No competitor replicates the physical yellow pad UX.
 
 **Context:** The yellow pad layout has two distinct zones:
 - **Header area** — larger line spacing; typically where name, date, and subject are written
 - **Body area** — consistent narrower line spacing for main content
 
 **What to build:**
-- The header zone supports **drag-and-drop text elements** (Name, Date, Subject) that users can reposition freely, like placing labels on real paper
-- Text elements in the header are **resizable** by dragging a handle
-- The body zone supports **continuous line-aligned typing**, with the cursor snapping to each ruled line
-- Users can **click anywhere on a body line** to start typing at that position
-- After positioning a header element, pressing Tab or Enter smoothly shifts focus to the body for uninterrupted writing
-- The yellow pad paper color (`#FDFBD4`) and ruled lines (`#B0C4DE` at 32px spacing, with a wider 64px spacing for the header) must accurately match a physical legal pad
-- A single **red left margin line** at 72px from the left edge
-- The overall feel: flexible placement first, then smooth continuous typing
+- The header zone supports drag-and-drop text elements (Name, Date, Subject) that users can reposition freely
+- Text elements in the header are resizable by dragging a handle
+- The body zone supports continuous line-aligned typing, with the cursor snapping to each ruled line
+- Users can click anywhere on a body line to start typing at that position
+- After positioning a header element, pressing Tab or Enter smoothly shifts focus to the body
+- The yellow pad color (#FDFBD4) and ruled lines (#B0C4DE at 32px spacing, 64px in the header) must match a physical legal pad
+- A single red left margin line at 72px from the left edge
 
 ```
 You are a professional software engineer with 10+ years of experience building scalable,
@@ -600,16 +777,17 @@ by adding 'yellow-pad' as a new paperType option in useSettingsStore.
 ## 🏆 Competitive Comparison
 
 | Feature | Your App | HandtextAI | RealisticHandwriting.com | texttohandwriting.com |
-|---|---|---|---|---|
+|---|:---:|:---:|:---:|:---:|
 | Live real-time preview | ✅ | ❌ | ❌ | ❌ |
-| Upload your own handwriting | ✅ | ✅ (paid) | ❌ | ❌ |
+| Upload your own handwriting | ✅ Free | ✅ Paid | ❌ | ❌ |
 | Filipino language support | ✅ | ❌ | ❌ | ❌ |
 | Tiredness / pressure effects | ✅ | ❌ | ❌ | ❌ |
 | Scan photo effect export | ✅ | ❌ | ❌ | ❌ |
 | Chalkboard mode | ✅ | ❌ | ❌ | ❌ |
 | Web Share API (WhatsApp) | ✅ | ❌ | ❌ | ❌ |
 | Interactive Yellow Pad mode | ✅ | ❌ | ❌ | ❌ |
-| 100% Free, no watermark | ✅ | ❌ (paid) | ✅ | ✅ |
+| 100% Free, no watermark | ✅ | ❌ | ✅ | ✅ |
+| 100% Client-side (no API calls) | ✅ | ❌ | ❌ | ❌ |
 
 ---
 
@@ -625,6 +803,141 @@ by adding 'yellow-pad' as a new paperType option in useSettingsStore.
 
 ---
 
-*Roadmap version: 2.0 — Text-to-Handwriting Web App*
-*Stack: React 18 · Vite · TypeScript · Tailwind CSS · Zustand · Canvas API*
-*Phases 1–6: ✅ Complete | Phase 7: 🚧 In Progress*
+## Appendix — Prompt 7.3 Library Reference
+
+### Grid Slicing (Core Logic)
+
+```typescript
+// gridSlicer.ts
+const GRID_CONFIG = {
+  cols: 10,
+  cellW: 60,
+  cellH: 80,
+  gutter: 12,
+  marginTop: 80,
+  marginLeft: 40,
+} as const;
+
+const CHARACTER_ORDER =
+  'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789.,!?\'"-()@#&%';
+
+export function sliceCharacters(
+  canvas: HTMLCanvasElement
+): Map<string, ImageData> {
+  const ctx = canvas.getContext('2d')!;
+  const result = new Map<string, ImageData>();
+  const { cols, cellW, cellH, gutter, marginTop, marginLeft } = GRID_CONFIG;
+
+  [...CHARACTER_ORDER].forEach((char, i) => {
+    const col = i % cols;
+    const row = Math.floor(i / cols);
+    const x = marginLeft + col * (cellW + gutter);
+    const y = marginTop + row * (cellH + gutter);
+    result.set(char, ctx.getImageData(x, y, cellW, cellH));
+  });
+
+  return result;
+}
+```
+
+### Image Preprocessing (Otsu's Threshold)
+
+```typescript
+// imagePreprocessor.ts — Otsu's automatic threshold
+function otsuThreshold(data: Uint8ClampedArray): number {
+  const histogram = new Array(256).fill(0);
+  const total = data.length / 4;
+
+  for (let i = 0; i < data.length; i += 4) {
+    const gray = Math.round(0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2]);
+    histogram[gray]++;
+  }
+
+  let sum = 0;
+  for (let i = 0; i < 256; i++) sum += i * histogram[i];
+
+  let sumB = 0, wB = 0, max = 0, threshold = 0;
+  for (let i = 0; i < 256; i++) {
+    wB += histogram[i];
+    if (wB === 0) continue;
+    const wF = total - wB;
+    if (wF === 0) break;
+    sumB += i * histogram[i];
+    const mB = sumB / wB;
+    const mF = (sum - sumB) / wF;
+    const between = wB * wF * (mB - mF) ** 2;
+    if (between > max) { max = between; threshold = i; }
+  }
+  return threshold;
+}
+```
+
+### Font Generation (opentype.js)
+
+```typescript
+// fontBuilder.ts
+import opentype from 'opentype.js';
+
+export async function buildFont(
+  paths: Map<string, string>
+): Promise<ArrayBuffer> {
+  const glyphs: opentype.Glyph[] = [
+    new opentype.Glyph({ name: '.notdef', unicode: 0, advanceWidth: 650, path: new opentype.Path() }),
+  ];
+
+  for (const [char, svgPathData] of paths) {
+    const path = opentype.Path.fromSVGPath(svgPathData);
+    // Flip Y-axis: font coords are bottom-up, SVG is top-down
+    path.commands = path.commands.map((cmd) => ({ ...cmd, y: 800 - (cmd.y ?? 0), y1: 800 - (cmd.y1 ?? 0), y2: 800 - (cmd.y2 ?? 0) }));
+
+    glyphs.push(new opentype.Glyph({
+      name: `char_${char.codePointAt(0)?.toString(16)}`,
+      unicode: char.codePointAt(0)!,
+      advanceWidth: 600,
+      path,
+    }));
+  }
+
+  const font = new opentype.Font({
+    familyName: 'MyHandwriting',
+    styleName: 'Regular',
+    unitsPerEm: 1000,
+    ascender: 800,
+    descender: -200,
+    glyphs,
+  });
+
+  return font.download(); // Returns ArrayBuffer
+}
+```
+
+### IndexedDB Storage (idb)
+
+```typescript
+// fontStorage.ts
+import { openDB } from 'idb';
+
+const DB_NAME = 'handwriting-app';
+const STORE_NAME = 'fonts';
+
+async function getDB() {
+  return openDB(DB_NAME, 1, {
+    upgrade(db) { db.createObjectStore(STORE_NAME); },
+  });
+}
+
+export async function saveFont(buffer: ArrayBuffer): Promise<void> {
+  const db = await getDB();
+  await db.put(STORE_NAME, buffer, 'my-handwriting-font');
+}
+
+export async function loadFont(): Promise<ArrayBuffer | null> {
+  const db = await getDB();
+  return (await db.get(STORE_NAME, 'my-handwriting-font')) ?? null;
+}
+
+export async function deleteFont(): Promise<void> {
+  const db = await getDB();
+  await db.delete(STORE_NAME, 'my-handwriting-font');
+}
+```
