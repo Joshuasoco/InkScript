@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ChangeEvent } from 'react';
-import { loadMyHandwritingFont } from '@utils/fontLoader';
+import { loadMyHandwritingFont, resetMyHandwritingFontState } from '@utils/fontLoader';
 
 import MyHandwritingWorker from '../workers/myHandwritingWorker?worker';
 
@@ -68,6 +68,7 @@ export const MyHandwritingWizard = ({
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [pageImageData, setPageImageData] = useState<ImageData | null>(null);
   const [uploadWarning, setUploadWarning] = useState<string | null>(null);
+  const [isTemplateCompatible, setIsTemplateCompatible] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [progress, setProgress] = useState<HandwritingProcessingProgress | null>(null);
   const [generatedFont, setGeneratedFont] = useState<GeneratedHandwritingFont | null>(null);
@@ -117,6 +118,7 @@ export const MyHandwritingWizard = ({
       setPreviewUrl(preparedUpload.previewDataUrl);
       setPageImageData(preparedUpload.imageData);
       setUploadWarning(preparedUpload.warning);
+      setIsTemplateCompatible(preparedUpload.isTemplateCompatible);
       setGeneratedFont(null);
       setStep(2);
     } catch (error) {
@@ -131,6 +133,11 @@ export const MyHandwritingWizard = ({
   const handleGenerateFont = async (): Promise<void> => {
     if (!pageImageData) {
       setErrorMessage('Upload a filled template photo before generating the font.');
+      return;
+    }
+
+    if (!isTemplateCompatible) {
+      setErrorMessage('This upload does not match the Step 1 template. Download that PDF, fill it in, and upload a photo of the same page.');
       return;
     }
 
@@ -151,15 +158,30 @@ export const MyHandwritingWizard = ({
       }
 
       if (event.data.type === 'success') {
-        const nextFont = event.data.payload;
+        try {
+          const nextFont = event.data.payload;
 
-        await saveFont(nextFont.buffer);
-        await loadMyHandwritingFont();
-        setGeneratedFont(nextFont);
-        setIsBusy(false);
-        setStep(4);
-        onFontReady();
-        onSelectFont();
+          await saveFont(nextFont.buffer);
+
+          const fontLoadResult = await loadMyHandwritingFont();
+
+          if (!fontLoadResult.success) {
+            throw new Error(fontLoadResult.error ?? 'The saved handwriting font could not be loaded.');
+          }
+
+          setGeneratedFont(nextFont);
+          setIsBusy(false);
+          setStep(4);
+          onFontReady();
+          onSelectFont();
+        } catch (error) {
+          setErrorMessage(
+            error instanceof Error ? error.message : 'The generated handwriting font could not be saved.',
+          );
+          setIsBusy(false);
+          setStep(2);
+        }
+
         return;
       }
 
@@ -188,6 +210,7 @@ export const MyHandwritingWizard = ({
 
     try {
       await deleteFont();
+      resetMyHandwritingFontState();
       setGeneratedFont(null);
       onFontRemoved();
       setStep(1);
@@ -270,7 +293,7 @@ export const MyHandwritingWizard = ({
             <div>
               <h5 className="text-sm font-semibold text-neutral-800">Step 2. Upload the filled page</h5>
               <p className="mt-1 text-sm text-neutral-500">
-                Use a bright, straight photo with the full page in frame for the cleanest slicing.
+                Use the PDF from Step 1 and take a bright, straight photo with the full page in frame.
               </p>
             </div>
 
@@ -301,7 +324,7 @@ export const MyHandwritingWizard = ({
                 onClick={() => {
                   void handleGenerateFont();
                 }}
-                disabled={!pageImageData || isBusy}
+                disabled={!pageImageData || isBusy || !isTemplateCompatible}
                 className="min-h-11 rounded-2xl bg-primary-600 px-4 text-sm font-medium text-white shadow-paper transition hover:bg-primary-700 disabled:cursor-not-allowed disabled:bg-primary-200"
               >
                 Generate Font
@@ -336,8 +359,16 @@ export const MyHandwritingWizard = ({
                           stroke="rgba(37,99,235,0.35)"
                           strokeWidth="2"
                         />
+                        <line
+                          x1={cell.x + HANDWRITING_TEMPLATE_CONFIG.baselineInsetX}
+                          y1={cell.y + HANDWRITING_TEMPLATE_CONFIG.baselineOffsetY}
+                          x2={cell.x + cell.width - HANDWRITING_TEMPLATE_CONFIG.baselineInsetX}
+                          y2={cell.y + HANDWRITING_TEMPLATE_CONFIG.baselineOffsetY}
+                          stroke="rgba(100,116,139,0.4)"
+                          strokeWidth="1.5"
+                        />
                         <text
-                          x={cell.x + 6}
+                          x={cell.x + HANDWRITING_TEMPLATE_CONFIG.labelOffsetX}
                           y={cell.y + HANDWRITING_TEMPLATE_CONFIG.labelOffsetY}
                           fill="rgba(27,83,124,0.9)"
                           fontSize="13"
@@ -360,7 +391,13 @@ export const MyHandwritingWizard = ({
                 </div>
 
                 {uploadWarning ? (
-                  <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                  <div
+                    className={`rounded-2xl px-4 py-3 text-sm ${
+                      isTemplateCompatible
+                        ? 'border border-amber-200 bg-amber-50 text-amber-800'
+                        : 'border border-error-100 bg-error-50 text-error-700'
+                    }`}
+                  >
                     {uploadWarning}
                   </div>
                 ) : (

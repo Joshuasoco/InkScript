@@ -1,5 +1,8 @@
 const extractPathData = (svgMarkup: string): string => {
-  const matches = Array.from(svgMarkup.matchAll(/<path[^>]*d="([^"]+)"/g), (match) => match[1]);
+  const matches = Array.from(
+    svgMarkup.matchAll(/<path[^>]*\bd\s*=\s*(?:"([^"]+)"|'([^']+)')/gi),
+    (match) => match[1] ?? match[2] ?? '',
+  ).filter((value) => value.length > 0);
 
   return matches.join(' ').trim();
 };

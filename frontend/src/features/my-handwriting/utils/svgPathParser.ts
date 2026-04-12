@@ -57,6 +57,8 @@ export const parseSvgPathData = (pathData: string): SvgPathCommand[] => {
     if (isCommandToken(token)) {
       currentCommand = token;
       index += 1;
+    } else if (currentCommand.length === 0 || currentCommand.toUpperCase() === 'Z') {
+      throw new Error(`Unexpected SVG path token "${token}".`);
     }
 
     const isRelative = currentCommand === currentCommand.toLowerCase();
@@ -240,7 +242,6 @@ export const parseSvgPathData = (pathData: string): SvgPathCommand[] => {
         commands.push({ type: 'Z' });
         currentPoint = subpathStart;
         previousControlPoint = null;
-        index += 1;
         break;
 
       default:

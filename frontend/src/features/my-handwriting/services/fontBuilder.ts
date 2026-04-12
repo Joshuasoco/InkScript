@@ -1,6 +1,7 @@
 import opentype, { Font as OpenTypeFont, Glyph as OpenTypeGlyph, Path as OpenTypePath } from 'opentype.js';
 
 import {
+  HANDWRITING_TEMPLATE_CONFIG,
   MY_HANDWRITING_FONT_FILENAME,
   MY_HANDWRITING_FONT_NAME,
 } from '../constants';
@@ -8,14 +9,17 @@ import type { GeneratedHandwritingFont } from '../types';
 import { parseSvgPathData } from '../utils/svgPathParser';
 
 const UNITS_PER_EM = 1000;
-const ASCENDER = 800;
-const DESCENDER = -200;
+const SOURCE_TO_FONT_SCALE = 10;
+const ASCENDER = 780;
+const DESCENDER = -220;
 const DEFAULT_ADVANCE_WIDTH = 620;
 const SPACE_ADVANCE_WIDTH = 320;
-const TARGET_LEFT_PADDING = 70;
-const TARGET_BOTTOM_PADDING = -80;
-const TARGET_DRAW_WIDTH = 540;
-const TARGET_DRAW_HEIGHT = 840;
+const TARGET_LEFT_PADDING = 40;
+const TARGET_RIGHT_PADDING = 60;
+const MIN_ADVANCE_WIDTH = 220;
+const MAX_PATH_COMMANDS = 1400;
+const MAX_SOURCE_GLYPH_WIDTH = HANDWRITING_TEMPLATE_CONFIG.cellWidth * 1.5;
+const MAX_SOURCE_GLYPH_HEIGHT = HANDWRITING_TEMPLATE_CONFIG.cellHeight * 1.5;
 
 interface Bounds {
   minX: number;
@@ -25,6 +29,14 @@ interface Bounds {
 }
 
 type ParsedCommand = ReturnType<typeof parseSvgPathData>[number];
+
+const GUIDE_LINE_MAX_HEIGHT = 14;
+const GUIDE_LINE_MIN_WIDTH = HANDWRITING_TEMPLATE_CONFIG.cellWidth * 0.6;
+const GUIDE_LINE_MIN_Y = HANDWRITING_TEMPLATE_CONFIG.baselineOffsetY - 24;
+const GUIDE_LINE_MAX_Y = HANDWRITING_TEMPLATE_CONFIG.baselineOffsetY + 28;
+const GUIDE_BORDER_MAX_WIDTH = 10;
+const GUIDE_BORDER_MIN_HEIGHT = HANDWRITING_TEMPLATE_CONFIG.cellHeight * 0.65;
+const GUIDE_BORDER_EDGE_MARGIN = 12;
 
 const createNotdefGlyph = (): OpenTypeGlyph =>
   new opentype.Glyph({
@@ -84,14 +96,116 @@ const getBoundsFromCommands = (commands: ParsedCommand[]): Bounds | null => {
   };
 };
 
-const transformX = (value: number, bounds: Bounds, scale: number, extraOffsetX: number): number =>
-  TARGET_LEFT_PADDING + extraOffsetX + (value - bounds.minX) * scale;
+const splitCommandContours = (commands: ParsedCommand[]): ParsedCommand[][] => {
+  const contours: ParsedCommand[][] = [];
+  let current: ParsedCommand[] = [];
 
-const transformY = (value: number, bounds: Bounds, scale: number, extraOffsetY: number): number =>
-  TARGET_BOTTOM_PADDING + extraOffsetY + (bounds.maxY - value) * scale;
+  commands.forEach((command) => {
+    if (command.type === 'M' && current.length > 0) {
+      contours.push(current);
+      current = [];
+    }
+
+    current.push(command);
+  });
+
+  if (current.length > 0) {
+    contours.push(current);
+  }
+
+  return contours;
+};
+
+const shouldDiscardGuideContour = (bounds: Bounds): boolean => {
+  const width = bounds.maxX - bounds.minX + 1;
+  const height = bounds.maxY - bounds.minY + 1;
+  const midpointX = (bounds.minX + bounds.maxX) / 2;
+  const midpointY = (bounds.minY + bounds.maxY) / 2;
+
+  if (
+    width >= GUIDE_LINE_MIN_WIDTH &&
+    height <= GUIDE_LINE_MAX_HEIGHT &&
+    midpointY >= GUIDE_LINE_MIN_Y &&
+    midpointY <= GUIDE_LINE_MAX_Y
+  ) {
+    return true;
+  }
+
+  if (
+    height >= GUIDE_BORDER_MIN_HEIGHT &&
+    width <= GUIDE_BORDER_MAX_WIDTH &&
+    (midpointX <= GUIDE_BORDER_EDGE_MARGIN ||
+      midpointX >= HANDWRITING_TEMPLATE_CONFIG.cellWidth - GUIDE_BORDER_EDGE_MARGIN)
+  ) {
+    return true;
+  }
+
+  return false;
+};
+
+const stripGuideContours = (commands: ParsedCommand[]): ParsedCommand[] => {
+  const filteredContours = splitCommandContours(commands).filter((contour) => {
+    const bounds = getBoundsFromCommands(contour);
+
+    if (!bounds) {
+      return false;
+    }
+
+    return !shouldDiscardGuideContour(bounds);
+  });
+
+  const filteredCommands = filteredContours.flat();
+
+  return filteredCommands.length > 0 ? filteredCommands : commands;
+};
+
+const commandHasNonFiniteValue = (command: ParsedCommand): boolean => {
+  const numericValues: number[] = [];
+
+  if ('x' in command) {
+    numericValues.push(command.x);
+  }
+
+  if ('y' in command) {
+    numericValues.push(command.y);
+  }
+
+  if ('x1' in command) {
+    numericValues.push(command.x1);
+  }
+
+  if ('y1' in command) {
+    numericValues.push(command.y1);
+  }
+
+  if ('x2' in command) {
+    numericValues.push(command.x2);
+  }
+
+  if ('y2' in command) {
+    numericValues.push(command.y2);
+  }
+
+  return numericValues.some((value) => !Number.isFinite(value));
+};
+
+const transformX = (value: number, bounds: Bounds): number =>
+  TARGET_LEFT_PADDING + (value - bounds.minX) * SOURCE_TO_FONT_SCALE;
+
+const transformY = (value: number): number =>
+  HANDWRITING_TEMPLATE_CONFIG.baselineOffsetY * SOURCE_TO_FONT_SCALE - value * SOURCE_TO_FONT_SCALE;
 
 const buildGlyphPath = (pathData: string): { path: OpenTypePath; advanceWidth: number } => {
-  const commands = parseSvgPathData(pathData);
+  const commands = stripGuideContours(parseSvgPathData(pathData));
+
+  if (commands.length === 0 || commands.length > MAX_PATH_COMMANDS) {
+    throw new Error('Skipping malformed glyph outline.');
+  }
+
+  if (commands.some(commandHasNonFiniteValue)) {
+    throw new Error('Skipping non-finite glyph outline values.');
+  }
+
   const bounds = getBoundsFromCommands(commands);
   const path = new opentype.Path();
 
@@ -99,45 +213,40 @@ const buildGlyphPath = (pathData: string): { path: OpenTypePath; advanceWidth: n
     return { path, advanceWidth: DEFAULT_ADVANCE_WIDTH };
   }
 
-  const sourceWidth = Math.max(bounds.maxX - bounds.minX, 1);
-  const sourceHeight = Math.max(bounds.maxY - bounds.minY, 1);
-  const scale = Math.min(TARGET_DRAW_WIDTH / sourceWidth, TARGET_DRAW_HEIGHT / sourceHeight);
-  const extraOffsetX = Math.max(0, (TARGET_DRAW_WIDTH - sourceWidth * scale) / 2);
-  const extraOffsetY = Math.max(0, (TARGET_DRAW_HEIGHT - sourceHeight * scale) / 2);
+  const sourceWidth = bounds.maxX - bounds.minX + 1;
+  const sourceHeight = bounds.maxY - bounds.minY + 1;
+
+  if (sourceWidth > MAX_SOURCE_GLYPH_WIDTH || sourceHeight > MAX_SOURCE_GLYPH_HEIGHT) {
+    throw new Error('Skipping outlier glyph bounds.');
+  }
 
   commands.forEach((command) => {
     switch (command.type) {
       case 'M':
-        path.moveTo(
-          transformX(command.x, bounds, scale, extraOffsetX),
-          transformY(command.y, bounds, scale, extraOffsetY),
-        );
+        path.moveTo(transformX(command.x, bounds), transformY(command.y));
         break;
 
       case 'L':
-        path.lineTo(
-          transformX(command.x, bounds, scale, extraOffsetX),
-          transformY(command.y, bounds, scale, extraOffsetY),
-        );
+        path.lineTo(transformX(command.x, bounds), transformY(command.y));
         break;
 
       case 'Q':
         path.quadraticCurveTo(
-          transformX(command.x1, bounds, scale, extraOffsetX),
-          transformY(command.y1, bounds, scale, extraOffsetY),
-          transformX(command.x, bounds, scale, extraOffsetX),
-          transformY(command.y, bounds, scale, extraOffsetY),
+          transformX(command.x1, bounds),
+          transformY(command.y1),
+          transformX(command.x, bounds),
+          transformY(command.y),
         );
         break;
 
       case 'C':
         path.curveTo(
-          transformX(command.x1, bounds, scale, extraOffsetX),
-          transformY(command.y1, bounds, scale, extraOffsetY),
-          transformX(command.x2, bounds, scale, extraOffsetX),
-          transformY(command.y2, bounds, scale, extraOffsetY),
-          transformX(command.x, bounds, scale, extraOffsetX),
-          transformY(command.y, bounds, scale, extraOffsetY),
+          transformX(command.x1, bounds),
+          transformY(command.y1),
+          transformX(command.x2, bounds),
+          transformY(command.y2),
+          transformX(command.x, bounds),
+          transformY(command.y),
         );
         break;
 
@@ -147,14 +256,16 @@ const buildGlyphPath = (pathData: string): { path: OpenTypePath; advanceWidth: n
     }
   });
 
-  const transformedWidth = sourceWidth * scale;
   const advanceWidth = Math.round(
-    Math.min(UNITS_PER_EM * 0.9, TARGET_LEFT_PADDING * 2 + transformedWidth + 40),
+    Math.min(
+      UNITS_PER_EM * 0.92,
+      TARGET_LEFT_PADDING + sourceWidth * SOURCE_TO_FONT_SCALE + TARGET_RIGHT_PADDING,
+    ),
   );
 
   return {
     path,
-    advanceWidth: Math.max(advanceWidth, 240),
+    advanceWidth: Math.max(advanceWidth, MIN_ADVANCE_WIDTH),
   };
 };
 

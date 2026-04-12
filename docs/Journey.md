@@ -607,12 +607,12 @@ When selected, call loadMyHandwritingFont() before rendering.
 CONSTRAINTS
 ─────────────────────────────────────────
 - Zero AI, zero paid APIs, zero server requests — 100% client-side
-- TypeScript strict mode throughout — no `any` types
-- Each service module is independently testable (pure functions where possible)
+- TypeScript strict mode throughoutly testable (pure functions where possible)
 - Potrace WASM must be lazy-loaded only when the user reaches Step 3 (code split)
 - All processing must run in a Web Worker to keep the UI responsive
 - Graceful degradation: if a character cell fails processing, skip it and continue
-- Do not refactor unrelated code
+- Do not refactor unrelated codet — no `any` types
+- Each service module is independen
 ```
 
 ---

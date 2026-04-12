@@ -19,6 +19,8 @@ export interface PreparedHandwritingUpload {
   sourceWidth: number;
   sourceHeight: number;
   warning: string | null;
+  isTemplateCompatible: boolean;
+  templateMatchScore: number;
 }
 
 export interface GeneratedHandwritingFont {

@@ -295,7 +295,7 @@ export const SettingsPanel = (): JSX.Element => {
                       </div>
 
                       <p
-                        className="mt-3 text-[1.8rem] leading-none text-neutral-900"
+                        className="mt-3 block min-h-[3rem] overflow-hidden pt-1 text-[1.65rem] leading-[1.25] text-neutral-900"
                         style={{ fontFamily: isReady ? font.family : '"Times New Roman", serif' }}
                       >
                         {isCustomFont ? 'My style' : 'Hello'}

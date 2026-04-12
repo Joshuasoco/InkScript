@@ -67,6 +67,7 @@ const SOURCE_URL_PATTERN = /url\((['"]?)([^'")]+)\1\)\s*(format\((['"][^)]+['"]|
 const loadedFontFamilies = new Set<string>();
 const pendingFontLoads = new Map<string, Promise<void>>();
 let customFontObjectUrl: string | null = null;
+let loadedMyHandwritingFace: FontFace | null = null;
 
 const stripQuotes = (value: string): string => value.trim().replace(/^['"]|['"]$/g, '');
 
@@ -342,35 +343,47 @@ export const isFontLoaderError = (error: unknown): error is FontLoaderError =>
 export const isFontPreloadError = (error: unknown): error is FontPreloadError =>
   error instanceof FontPreloadError;
 
+export const resetMyHandwritingFontState = (): void => {
+  const normalizedName = normalizeFontIdentifier(MY_HANDWRITING_FONT_NAME);
+  const normalizedFamily = normalizeFontIdentifier(MY_HANDWRITING_FONT_FAMILY);
+
+  loadedFontFamilies.delete(normalizedName);
+  loadedFontFamilies.delete(normalizedFamily);
+
+  if (
+    loadedMyHandwritingFace &&
+    typeof document !== 'undefined' &&
+    'fonts' in document &&
+    typeof document.fonts.delete === 'function'
+  ) {
+    document.fonts.delete(loadedMyHandwritingFace);
+  }
+
+  loadedMyHandwritingFace = null;
+
+  if (customFontObjectUrl && typeof URL !== 'undefined') {
+    URL.revokeObjectURL(customFontObjectUrl);
+  }
+
+  customFontObjectUrl = null;
+};
+
 export const loadMyHandwritingFont = async (): Promise<{ success: boolean; error?: string }> => {
   try {
     ensureFontApiSupport(MY_HANDWRITING_FONT_FAMILY);
 
-    const normalizedName = normalizeFontIdentifier(MY_HANDWRITING_FONT_NAME);
-    const normalizedFamily = normalizeFontIdentifier(MY_HANDWRITING_FONT_FAMILY);
-
-    if (
-      loadedFontFamilies.has(normalizedName) ||
-      loadedFontFamilies.has(normalizedFamily) ||
-      document.fonts.check(`16px "${MY_HANDWRITING_FONT_NAME}"`)
-    ) {
-      loadedFontFamilies.add(normalizedName);
-      loadedFontFamilies.add(normalizedFamily);
-      return { success: true };
-    }
-
     const buffer = await loadStoredMyHandwritingFont();
 
     if (!buffer) {
+      resetMyHandwritingFontState();
+
       return {
         success: false,
         error: 'No saved handwriting font was found yet. Generate one first.',
       };
     }
 
-    if (customFontObjectUrl) {
-      URL.revokeObjectURL(customFontObjectUrl);
-    }
+    resetMyHandwritingFontState();
 
     customFontObjectUrl = URL.createObjectURL(new Blob([buffer], { type: 'font/ttf' }));
 
@@ -378,8 +391,9 @@ export const loadMyHandwritingFont = async (): Promise<{ success: boolean; error
     const loadedFont = await fontFace.load();
 
     document.fonts.add(loadedFont);
-    loadedFontFamilies.add(normalizedName);
-    loadedFontFamilies.add(normalizedFamily);
+    loadedMyHandwritingFace = loadedFont;
+    loadedFontFamilies.add(normalizeFontIdentifier(MY_HANDWRITING_FONT_NAME));
+    loadedFontFamilies.add(normalizeFontIdentifier(MY_HANDWRITING_FONT_FAMILY));
 
     return { success: true };
   } catch (error) {
